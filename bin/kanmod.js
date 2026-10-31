@@ -70,11 +70,12 @@ try {
 }
 
 const { context, url } = started;
+const { DATA_DIR } = await import('../src/config.js');
 console.log('');
 console.log('  kanmod 已启动');
 console.log(`  访问地址  ${url}`);
 console.log(`  KSP 实例  ${demoInfo ? demoInfo.kspPath : context.configStore.get().instances.length ? context.configStore.get().activeInstanceId || '未选择' : '尚未配置'}`);
-console.log(`  数据目录  ${demoInfo ? demoInfo.dataDir : path.join(APP_ROOT, '.data')}`);
+console.log(`  数据目录  ${demoInfo ? demoInfo.dataDir : DATA_DIR}`);
 console.log('');
 console.log('  关闭此窗口或按 Ctrl+C 退出。');
 console.log('');
