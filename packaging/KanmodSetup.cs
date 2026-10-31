@@ -14,13 +14,13 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.2.0")]
-[assembly: AssemblyFileVersion("0.0.2.0")]
-[assembly: AssemblyInformationalVersion("0.0.2")]
+[assembly: AssemblyVersion("0.0.3.0")]
+[assembly: AssemblyFileVersion("0.0.3.0")]
+[assembly: AssemblyInformationalVersion("0.0.3")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.0.2";
+    internal const string AppVersion = "0.0.3";
 
     [STAThread]
     private static int Main(string[] args)
@@ -130,15 +130,21 @@ internal static class Program
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "kanmod", "data");
             }
-            string runtimeFile = Path.Combine(dataDir, "runtime.json");
-            if (!File.Exists(runtimeFile)) return;
-            string text = File.ReadAllText(runtimeFile, Encoding.UTF8);
-            Match match = Regex.Match(text, "\"pid\"\\s*:\\s*(\\d+)");
-            if (match.Success)
+            string[] files =
             {
-                int pid;
-                if (int.TryParse(match.Groups[1].Value, out pid))
+                Path.Combine(dataDir, "supervisor.json"),
+                Path.Combine(dataDir, "runtime.json")
+            };
+            foreach (string file in files)
+            {
+                if (!File.Exists(file)) continue;
+                string text = File.ReadAllText(file, Encoding.UTF8);
+                foreach (string field in new[] { "pid", "childPid" })
                 {
+                    Match match = Regex.Match(text, "\"" + field + "\"\\s*:\\s*(\\d+)");
+                    if (!match.Success) continue;
+                    int pid;
+                    if (!int.TryParse(match.Groups[1].Value, out pid)) continue;
                     try
                     {
                         Process process = Process.GetProcessById(pid);
@@ -150,9 +156,9 @@ internal static class Program
                     }
                     catch { }
                 }
+                try { File.Delete(file); } catch { }
             }
             Thread.Sleep(300);
-            try { File.Delete(runtimeFile); } catch { }
         }
         catch { }
     }

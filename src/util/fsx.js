@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import fssync from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { isWithin, normalizeRel } from './paths.js';
+import { isWithin, KSP_DESTINATIONS, normalizeRel } from './paths.js';
 
 export async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
@@ -154,10 +154,14 @@ export async function readTailBytes(file, maxBytes = 2 * 1024 * 1024) {
 export async function safeRemoveEmptyDirs(root, startDir) {
   let current = startDir;
   const stop = path.resolve(root);
+  const protectedDirs = new Set(KSP_DESTINATIONS.map((name) => name.toLowerCase()));
   while (isWithin(stop, current) && path.resolve(current) !== stop) {
     try {
       const entries = await fs.readdir(current);
       if (entries.length > 0) break;
+      if (path.dirname(path.resolve(current)) === stop && protectedDirs.has(path.basename(current).toLowerCase())) {
+        break;
+      }
       await fs.rmdir(current);
     } catch {
       break;

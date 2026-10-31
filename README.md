@@ -4,7 +4,7 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.0.2-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.0.3-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -13,6 +13,7 @@
 - **依赖解析与前置安装**：递归解析硬依赖、版本范围、虚拟 provides，生成安装顺序，只选择兼容版本。
 - **多下载源回退**：CKAN 直链 → 镜像前缀 → GitHub Releases → SpaceDock；失败时保留每次尝试记录。下载支持 SHA256 校验。
 - **安全安装**：按 CKAN `install` 规则落到 GameData / Ships / Missions 等位置；覆盖前备份；写盘失败回滚；卸载移动到回收站。
+- **模组管理**：禁用（移动到 `KSP/DisabledMods`，不会继续被加载）、启用、删除到回收站、一键更新可更新模组；不会直接删除游戏文件。
 - **问题诊断**：检查缺失前置、版本约束、冲突、KSP 兼容性、重复 DLL、安装记录漂移，并读取 `KSP.log` / `output_log.txt` / `Player.log` 的异常。自动修复只处理安全的依赖安装/兼容更新，冲突移除必须确认。
 - **模组关联**：依赖图、被依赖、推荐、冲突，以及模组简介页的一键跳转。
 - **中文翻译**：打开英文模组简介时自动翻译简介；完整说明可手动翻译。支持 Google / MyMemory 在线翻译、本地缓存和演示内置翻译。机器翻译仅供参考。
@@ -27,7 +28,7 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.2.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.3.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
 默认安装位置  %LOCALAPPDATA%\Programs\kanmod
@@ -40,9 +41,10 @@
 ### 无法连接本地服务
 
 1. 从桌面或开始菜单重新打开 **kanmod**，不要直接访问旧的端口地址。
-2. 如果浏览器提示连接失败，先运行 `kanmod.exe --stop`，再重新打开。
-3. 检查 `%LOCALAPPDATA%\kanmod\data\launcher.log`；服务地址也会写入同目录的 `last-url.txt`。
-4. 端口 `4173` 被其他程序占用时，kanmod 会自动换端口；始终使用启动时打开的地址。
+2. kanmod 由后台守护进程托管，服务异常退出会自动重启；页面断线后也会自动重试，不需要反复刷新。
+3. 如果浏览器提示连接失败，先运行 `kanmod.exe --stop`，再重新打开。
+4. 检查 `launcher.log` 与 `supervisor.log`（位于数据目录）；服务地址也会写入同目录的 `last-url.txt`。
+5. 端口 `4173` 被其他程序占用时，kanmod 会自动换端口；始终使用启动时打开的地址。
 
 ### 从源码运行
 
@@ -130,7 +132,7 @@ test/                Node 内置测试
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.0.2.exe`。安装器把应用和 Node.js 运行时释放到 `%LOCALAPPDATA%\Programs\kanmod`，数据单独保存在 `%LOCALAPPDATA%\kanmod\data`。
+产物位于 `.artifacts/build/kanmod-setup-0.0.3.exe`。安装器把应用和 Node.js 运行时释放到 `%LOCALAPPDATA%\Programs\kanmod`，数据单独保存在 `%LOCALAPPDATA%\kanmod\data`。
 
 ## 已知限制
 

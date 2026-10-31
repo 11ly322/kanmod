@@ -16,7 +16,7 @@ function option(name, fallback = null) {
 }
 
 if (hasFlag('--help') || hasFlag('-h')) {
-  console.log(`kanmod 0.0.2 — 坎巴拉太空计划 1 模组管理器
+  console.log(`kanmod 0.0.3 — 坎巴拉太空计划 1 模组管理器
 
 用法:
   node bin/kanmod.js                 启动并打开 kanmod
@@ -30,7 +30,7 @@ if (hasFlag('--help') || hasFlag('-h')) {
 }
 
 if (hasFlag('--version') || hasFlag('-v')) {
-  console.log('kanmod 0.0.2');
+  console.log('kanmod 0.0.3');
   process.exit(0);
 }
 
@@ -38,6 +38,10 @@ const demo = hasFlag('--demo');
 const fresh = hasFlag('--fresh');
 const noOpen = hasFlag('--no-open');
 const requestedPort = Number(option('--port', '4173'));
+const explicitDataDir = option('--data-dir', null);
+if (explicitDataDir) {
+  process.env.KANMOD_DATA_DIR = path.resolve(explicitDataDir);
+}
 
 if (demo) {
   // Give the demo its own data directory before importing modules that read DATA_DIR.
@@ -79,7 +83,7 @@ try {
     pid: process.pid,
     port: context.port,
     url,
-    version: '0.0.2',
+    version: '0.0.3',
     appRoot: APP_ROOT,
     startedAt: new Date().toISOString(),
   }, null, 2), 'utf8');

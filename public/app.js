@@ -31,6 +31,10 @@ const state = {
   pendingPlan: null,
   pendingUpload: null,
   mod: null,
+  bootError: null,
+  reconnectTimer: null,
+  reconnecting: false,
+  sseEverOpen: false,
 };
 
 const VIEW_META = {
@@ -256,10 +260,21 @@ async function api(path, options = {}) {
     request.body = JSON.stringify(body);
   }
   let response;
-  try {
-    response = await fetch(path, request);
-  } catch (error) {
-    throw new Error(`无法连接本地 kanmod 服务：${error.message}`);
+  const retries = method === 'GET' ? 2 : 0;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      response = await fetch(path, request);
+      break;
+    } catch (error) {
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+        continue;
+      }
+      const networkError = new Error(`无法连接本地 kanmod 服务：${error.message}`);
+      networkError.network = true;
+      networkError.cause = error;
+      throw networkError;
+    }
   }
   const text = await response.text();
   let data = null;
@@ -365,7 +380,7 @@ function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.0.2')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.0.3')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -412,11 +427,49 @@ async function boot() {
     const data = await api('/api/bootstrap');
     applyBootstrap(data);
     state.library.pageSize = Number(data.settings?.ui?.pageSize) || 24;
+    state.bootError = null;
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
     renderApp();
     startEvents();
   } catch (error) {
+    state.bootError = error;
     renderFatal(error);
   }
+}
+
+function retryBoot() {
+  clearTimeout(state.reconnectTimer);
+  state.reconnectTimer = null;
+  const app = document.getElementById('app');
+  if (app) {
+    app.innerHTML = '<div class="boot-screen"><span class="brand-mark">K<span></span></span><div><strong>kanmod</strong><p>正在重新连接…</p></div><span class="spinner"></span></div>';
+  }
+  boot();
+}
+
+function scheduleBootRetry() {
+  if (state.reconnectTimer) return;
+  state.reconnectTimer = setTimeout(async () => {
+    state.reconnectTimer = null;
+    if (state.bootstrap || state.reconnecting) return;
+    state.reconnecting = true;
+    try {
+      const data = await api('/api/bootstrap');
+      applyBootstrap(data);
+      state.library.pageSize = Number(data.settings?.ui?.pageSize) || 24;
+      state.bootError = null;
+      renderApp();
+      startEvents();
+    } catch (error) {
+      state.bootError = error;
+      const detail = document.getElementById('fatal-detail');
+      if (detail) detail.textContent = `${error.message} · 正在自动重试…`;
+      scheduleBootRetry();
+    } finally {
+      state.reconnecting = false;
+    }
+  }, 2200);
 }
 
 function applyBootstrap(data) {
@@ -448,11 +501,12 @@ function renderFatal(error) {
       <div class="fatal-card">
         <span class="brand-mark" aria-hidden="true">K<span></span></span>
         <h1>kanmod 无法连接本地服务</h1>
-        <p>${esc(error.message || String(error))}</p>
-        <button class="btn primary" type="button" data-action="boot-retry">重新连接</button>
-        <p class="text-muted" style="margin-top:14px;font-size:11px">请从 kanmod 启动时输出的地址打开，并保持终端窗口运行。</p>
+        <p id="fatal-detail">${esc(error.message || String(error))} · 正在自动重试…</p>
+        <button class="btn primary" type="button" data-action="boot-retry">立即重试</button>
+        <p class="text-muted" style="margin-top:14px;font-size:11px">kanmod 会自动重启本地服务并重新连接；也可以关闭页面，从桌面快捷方式重新打开。</p>
       </div>
     </div>`;
+  scheduleBootRetry();
 }
 
 function openOnboarding() {
@@ -616,15 +670,19 @@ function installedTable(entries, { compact = false } = {}) {
     <table>
       <thead><tr><th>模组</th><th>版本</th><th>适用 KSP</th><th>管理</th>${compact ? '' : '<th>大小</th>'}<th class="right">操作</th></tr></thead>
       <tbody>${entries.map((entry) => `
-        <tr>
-          <td><div class="table-mod"><span class="mini-avatar">${initial(entry.name)}</span><div><strong>${esc(entry.name || entry.folder)}</strong><small>${esc(entry.identifier || entry.folder || '')}</small></div></div></td>
-          <td class="mono">${esc(entry.installedVersion || '—')}</td>
+        <tr class="${entry.disabled ? 'row-disabled' : ''}">
+          <td><div class="table-mod"><span class="mini-avatar">${initial(entry.name)}</span><div><strong>${esc(entry.name || entry.folder)}</strong><small>${esc(entry.identifier || entry.folder || '')}${entry.disabled ? ' · 已禁用' : ''}</small></div></div></td>
+          <td class="mono">${esc(entry.installedVersion || '—')}${entry.updateAvailable ? `<small class="update-hint">→ ${esc(entry.latestVersion)}</small>` : ''}</td>
           <td>${entry.kspVersion ? `<span class="badge">KSP ${esc(entry.kspVersion)}</span>` : '<span class="text-muted">未声明</span>'}</td>
-          <td>${managedBadge(entry)}</td>
+          <td>${entry.disabled ? '<span class="badge muted">已禁用</span>' : managedBadge(entry)}</td>
           ${compact ? '' : `<td class="mono">${esc(entry.sizeLabel || fmtBytes(entry.size))}</td>`}
           <td><div class="row-actions">
             ${entry.identifier ? `<button class="btn ghost sm" type="button" data-action="open-mod-page" data-id="${esc(entry.identifier)}">${icon('book', 13)}简介</button>` : ''}
-            ${entry.managedBy === 'kanmod' ? `<button class="btn danger sm" type="button" data-action="uninstall" data-id="${esc(entry.identifier)}">卸载</button>` : ''}
+            ${entry.updateAvailable ? `<button class="btn primary sm" type="button" data-action="update-mod" data-id="${esc(entry.identifier)}" title="更新到 ${esc(entry.latestVersion)}">更新</button>` : ''}
+            ${entry.disabled
+              ? `<button class="btn soft sm" type="button" data-action="enable-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('play', 13)}启用</button>`
+              : `<button class="btn ghost sm" type="button" data-action="disable-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('pause', 13)}禁用</button>`}
+            <button class="btn danger sm" type="button" data-action="delete-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('trash', 13)}删除</button>
           </div></td>
         </tr>`).join('')}
       </tbody>
@@ -718,17 +776,21 @@ function installedHtml() {
   const scan = data?.scan || state.bootstrap.scan;
   if (!state.bootstrap.instance) return openOnboarding();
   if (state.installedLoading && !data) return `<div class="page-head"><div><h2>已安装</h2><p>正在扫描 GameData…</p></div></div>${skeletonRows(5)}`;
-  const entries = scan?.entries || [];
+  const entries = data?.installed || scan?.entries || [];
+  const disabled = data?.disabled || [];
+  const updates = data?.updates || [];
   const records = data?.records || [];
   const broken = records.filter((record) => !entries.some((entry) => shortId(entry.identifier) === shortId(record.identifier)));
   return `
     <div class="page-head">
-      <div><h2>已安装模组</h2><p>扫描到 ${fmtNumber(entries.length)} 个模组条目。kanmod 只卸载由自己管理的模组，文件会先移入回收站。</p></div>
+      <div><h2>已安装模组</h2><p>扫描到 ${fmtNumber(entries.length)} 个模组条目${disabled.length ? `，其中 ${disabled.length} 个已禁用` : ''}。禁用会把整个模组移出 GameData；删除会先移入回收站。</p></div>
       <div class="head-aside">
+        ${updates.length ? `<button class="btn primary" type="button" data-action="update-all">${icon('refresh', 15)}一键更新 ${updates.length} 项</button>` : ''}
         <button class="btn ghost" type="button" data-action="open-folder" data-target="gamedata">${icon('folder', 15)}GameData</button>
         <button class="btn ghost" type="button" data-action="refresh-scan">${icon('refresh', 15)}重新扫描</button>
       </div>
     </div>
+    ${disabled.length ? `<div class="notice">${icon('pause', 18)}<div><strong>${disabled.length} 个模组已禁用。</strong> 文件保存在 KSP/DisabledMods，不会进入游戏；点“启用”可原位恢复。</div></div>` : ''}
     ${broken.length ? `<div class="notice warn">${icon('alert', 18)}<div><strong>有 ${broken.length} 条安装记录在磁盘上找不到对应目录。</strong> 可能是手动删除或安装未完成。到问题诊断运行一次检查。</div></div>` : ''}
     ${scan?.duplicates?.length ? `<div class="notice red">${icon('alert', 18)}<div><strong>发现 ${scan.duplicates.length} 组重复 DLL。</strong> 重复程序集可能导致启动报错，请到问题诊断查看。</div></div>` : ''}
     <div class="card" style="margin-top:14px">
@@ -1250,7 +1312,7 @@ function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.0.2')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.0.3')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1479,6 +1541,108 @@ function uninstall(identifier) {
       await reloadBootstrap({ resetData: true });
       if (state.view === 'installed') await loadInstalled();
       toast(`已移动 ${result.moved || 0} 个文件到回收站`);
+    },
+  });
+}
+
+function findManagedEntry(id) {
+  const entries = state.installed?.installed || state.installed?.scan?.entries || state.bootstrap.scan?.entries || [];
+  const disabled = state.installed?.disabled || [];
+  return [...entries, ...disabled].find((entry) => {
+    const keys = [entry.identifier, entry.folder, entry.name, entry.id];
+    return keys.some((key) => key && shortId(key) === shortId(id)) || entry.id === id;
+  });
+}
+
+async function afterModChange(message) {
+  await reloadBootstrap({ resetData: true, render: false });
+  await loadInstalled();
+  toast(message);
+}
+
+function disableManagedMod(id) {
+  const entry = findManagedEntry(id);
+  confirmAction({
+    title: '禁用模组',
+    message: `“${entry?.name || id}”会整个移到 KSP/DisabledMods，游戏将不再加载它。文件不会删除，随时可以启用。`,
+    confirmText: '禁用',
+    onConfirm: async () => {
+      await api('/api/mods/disable', { method: 'POST', body: { identifier: entry?.identifier || id } });
+      await afterModChange('模组已禁用，重新启动 KSP 后生效');
+    },
+  });
+}
+
+function enableManagedMod(id) {
+  const entry = findManagedEntry(id);
+  confirmAction({
+    title: '启用模组',
+    message: `“${entry?.name || id}”会从 KSP/DisabledMods 移回原来的 GameData 位置。若原位置已有同名文件，kanmod 不会覆盖。`,
+    confirmText: '启用',
+    onConfirm: async () => {
+      await api('/api/mods/enable', { method: 'POST', body: { identifier: entry?.identifier || id } });
+      await afterModChange('模组已启用，重新启动 KSP 后生效');
+    },
+  });
+}
+
+function deleteManagedMod(id) {
+  const entry = findManagedEntry(id);
+  confirmAction({
+    title: '删除模组',
+    message: `“${entry?.name || id}”会移动到 kanmod 回收站，不会直接擦除。若这是手动安装的模组，整个顶层文件夹都会一起移走。`,
+    confirmText: '移到回收站',
+    onConfirm: async () => {
+      const result = await api('/api/mods/delete', {
+        method: 'POST',
+        body: { identifier: entry?.identifier || id, folder: entry?.folder || id },
+      });
+      await afterModChange(result.moved === false ? '没有找到可移动的文件，安装记录已清理' : '模组已移入回收站');
+    },
+  });
+}
+
+async function updateManagedMod(id) {
+  const button = document.querySelector(`[data-action="update-mod"][data-id="${CSS.escape(id)}"]`);
+  setBusy(button, true, '准备更新…');
+  try {
+    const data = await api('/api/mods/update', { method: 'POST', body: { identifier: id } });
+    if (!data.job) {
+      toast(data.message || '这个模组已经是最新版本');
+      await loadInstalled();
+      return;
+    }
+    upsertJob(data.job);
+    state.view = 'jobs';
+    renderApp();
+    toast('更新任务已开始，前置会一起处理');
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+function updateAllMods() {
+  const updates = state.installed?.updates || [];
+  if (!updates.length) {
+    toast('当前没有可更新的模组');
+    return;
+  }
+  confirmAction({
+    title: `一键更新 ${updates.length} 个模组`,
+    message: `将按依赖顺序更新：${updates.map((item) => item.name || item.identifier).join('、')}。版本不兼容或有冲突的模组会自动跳过，不会强行升级。`,
+    confirmText: '开始更新',
+    onConfirm: async () => {
+      const data = await api('/api/mods/update', { method: 'POST', body: {} });
+      if (!data.job) {
+        toast(data.message || '没有可执行的更新');
+        return;
+      }
+      upsertJob(data.job);
+      state.view = 'jobs';
+      renderApp();
+      toast('更新任务已开始');
     },
   });
 }
@@ -2140,7 +2304,12 @@ function startEvents() {
   try {
     const source = new EventSource('/api/events');
     source.onopen = () => {
+      const reconnected = state.sseEverOpen;
       state.sseOpen = true;
+      state.sseEverOpen = true;
+      if (reconnected && state.bootstrap) {
+        reloadBootstrap({ resetData: true, render: true }).catch(() => {});
+      }
     };
     source.onerror = () => {
       state.sseOpen = false;
@@ -2217,8 +2386,7 @@ function setupEvents() {
           navigate(actionNode.dataset.view);
           break;
         case 'boot-retry':
-          document.getElementById('app').innerHTML = '<div class="boot-screen"><span class="brand-mark">K<span></span></span><div><strong>kanmod</strong><p>正在重新连接…</p></div><span class="spinner"></span></div>';
-          boot();
+          retryBoot();
           break;
         case 'refresh-scan':
           await refreshScan();
@@ -2309,6 +2477,21 @@ function setupEvents() {
           break;
         case 'uninstall':
           uninstall(actionNode.dataset.id);
+          break;
+        case 'disable-mod':
+          disableManagedMod(actionNode.dataset.id);
+          break;
+        case 'enable-mod':
+          enableManagedMod(actionNode.dataset.id);
+          break;
+        case 'delete-mod':
+          deleteManagedMod(actionNode.dataset.id);
+          break;
+        case 'update-mod':
+          await updateManagedMod(actionNode.dataset.id);
+          break;
+        case 'update-all':
+          updateAllMods();
           break;
         case 'open-folder':
           await openFolder(actionNode.dataset.target);

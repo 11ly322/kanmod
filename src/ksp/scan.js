@@ -7,6 +7,18 @@ import { inspectKspPath } from './version.js';
 const STOCK_FOLDERS = new Set(['squad', 'squadexpansion', 'squad_expansion']);
 const IGNORED_FOLDERS = new Set(['.kanmod', '__macosx']);
 
+function formatMetadataVersion(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    const parts = [value.MAJOR, value.MINOR, value.PATCH, value.BUILD]
+      .filter((part) => part !== null && part !== undefined && part !== '')
+      .map((part) => String(part));
+    return parts.length ? parts.join('.') : null;
+  }
+  return null;
+}
+
 export function parseVersionMetadata(text) {
   if (!text) return null;
   try {
@@ -16,10 +28,10 @@ export function parseVersionMetadata(text) {
       identifier: data.IDENTIFIER || data.identifier || null,
       name: data.NAME || data.name || null,
       abstract: data.ABSTRACT || data.abstract || null,
-      version: data.VERSION || data.version || null,
-      kspVersion: data.KSP_VERSION || data.ksp_version || null,
-      kspVersionMin: data.KSP_VERSION_MIN || data.ksp_version_min || null,
-      kspVersionMax: data.KSP_VERSION_MAX || data.ksp_version_max || null,
+      version: formatMetadataVersion(data.VERSION || data.version),
+      kspVersion: formatMetadataVersion(data.KSP_VERSION || data.ksp_version),
+      kspVersionMin: formatMetadataVersion(data.KSP_VERSION_MIN || data.ksp_version_min),
+      kspVersionMax: formatMetadataVersion(data.KSP_VERSION_MAX || data.ksp_version_max),
       author: data.AUTHOR || data.author || null,
       url: data.URL || data.url || null,
       download: data.DOWNLOAD || data.download || null,
@@ -181,7 +193,7 @@ export async function scanGameData(kspPath, options = {}) {
       const registryRecord = findRegistryRecord(options.registry, dirent.name, primary.identifier);
       const ckanComponent = components.find((component) =>
         String(component.sourceFile || '').toLowerCase().endsWith('.ckan'));
-      const identifier = registryRecord?.identifier || ckanComponent?.identifier || null;
+      const identifier = registryRecord?.identifier || ckanComponent?.identifier || primary.identifier || null;
       const version = registryRecord?.version || ckanComponent?.version || primary.version;
       const compatibilityMetadata = ckanComponent || primary;
       entries.push({

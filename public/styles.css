@@ -447,7 +447,12 @@ tr:hover td { background: #fefcfc; }
 .table-mod strong { display: block; font-size: 12px; font-weight: 650; }
 .table-mod small { display: block; color: var(--muted-2); font-size: 9.5px; font-family: var(--mono); margin-top: 1px; }
 .mono { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
-.row-actions { display: flex; justify-content: flex-end; gap: 5px; }
+.row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.table-wrap .row-actions { flex-wrap: nowrap; }
+.row-disabled td { background: #fbf7f7; }
+.row-disabled .table-mod { opacity: .62; }
+.update-hint { display: block; color: var(--red); font-size: 9px; margin-top: 2px; font-weight: 650; }
+.badge.muted { background: #f0eeee; color: #8b8585; }
 
 .health-panel { display: flex; align-items: center; gap: 22px; padding: 20px; }
 .health-ring {

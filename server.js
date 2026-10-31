@@ -18,11 +18,20 @@ import { installArchive, previewInstall, uninstallRecord } from './src/installer
 import { diagnoseGame, findLogFile, planRepairs } from './src/diagnostics.js';
 import { JobQueue } from './src/jobs.js';
 import { translateText, TranslationError, cleanSourceText } from './src/translate.js';
+import {
+  DisabledStore,
+  computeUpdates,
+  disableMod,
+  disabledFileForInstance,
+  enableMod,
+  removeModPath,
+} from './src/modManager.js';
 import { ensureDir, pathExists, writeFileAtomic, formatBytes } from './src/util/fsx.js';
 import { safeFileName } from './src/util/paths.js';
+import { normalizeIdentifier } from './src/util/version.js';
 
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
-const APP_VERSION = '0.0.2';
+const APP_VERSION = '0.0.3';
 const MAX_JSON_BODY = 4 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const COOKIE_NAME = 'kanmod_token';
@@ -273,28 +282,40 @@ async function getRuntime(context, { forceScan = false } = {}) {
   return { instance, info, registry, scan: cached.scan };
 }
 
-function installedData(scan, registry) {
+function installedData(scan, registry, disabledKeys = new Set()) {
   const entries = [];
   const seen = new Set();
   for (const entry of scan?.entries || []) {
-    if (!entry.identifier) continue;
-    const key = lower(entry.identifier);
-    if (seen.has(key)) continue;
+    const identifier = entry.identifier || normalizeIdentifier(entry.folder || entry.name || '');
+    if (!identifier) continue;
+    const key = lower(identifier);
+    if (seen.has(key) || disabledKeys.has(key)) continue;
     seen.add(key);
+    const installedRel = entry.relPath
+      ? (entry.relPath.startsWith('GameData/') ? entry.relPath : `GameData/${entry.relPath}`)
+      : null;
     entries.push({
-      identifier: entry.identifier,
+      identifier,
       name: entry.name,
       version: entry.installedVersion || null,
       installedVersion: entry.installedVersion || null,
       folder: entry.folder,
+      relPath: installedRel,
+      absolutePath: entry.absolutePath || null,
       managed: Boolean(entry.managed),
       managedBy: entry.managedBy,
       kspVersion: entry.kspVersion || null,
+      size: entry.size || null,
+      sizeLabel: entry.sizeLabel || formatBytes(entry.size || 0),
+      dllCount: entry.dllCount || 0,
+      configCount: entry.configCount || 0,
+      disabled: false,
     });
   }
   for (const record of registry?.records?.() || []) {
+    if (record.disabled) continue;
     const key = lower(record.identifier || record.id);
-    if (!key || seen.has(key)) continue;
+    if (!key || seen.has(key) || disabledKeys.has(key)) continue;
     seen.add(key);
     entries.push({
       identifier: record.identifier || record.id,
@@ -302,9 +323,15 @@ function installedData(scan, registry) {
       version: record.version || null,
       installedVersion: record.version || null,
       folder: record.folder || null,
+      relPath: record.installRoots?.[0] || null,
       managed: true,
       managedBy: 'kanmod',
       kspVersion: record.kspVersion || null,
+      size: record.archiveSize || null,
+      sizeLabel: record.archiveSize ? formatBytes(record.archiveSize) : null,
+      dllCount: 0,
+      configCount: 0,
+      disabled: false,
     });
   }
   const identifiers = new Set(entries.map((entry) => lower(entry.identifier)));
@@ -314,6 +341,67 @@ function installedData(scan, registry) {
   }
   return { entries, identifiers, versions };
 }
+
+async function getDisabledStore(context, instanceId) {
+  const cached = context.disabledCache.get(instanceId);
+  if (cached) return cached;
+  const store = await new DisabledStore(disabledFileForInstance(instanceId)).load();
+  context.disabledCache.set(instanceId, store);
+  return store;
+}
+
+async function installedFor(context, runtime) {
+  const store = await getDisabledStore(context, runtime.instance.id);
+  const disabled = store.records();
+  const disabledKeys = new Set(disabled.map((item) => lower(item.identifier)).filter(Boolean));
+  const installed = installedData(runtime.scan, runtime.registry, disabledKeys);
+  const updates = computeUpdates(
+    installed.entries,
+    context.catalogStore.catalog,
+    runtime.scan.kspVersion || runtime.info.version || null,
+  );
+  const disabledEntries = disabled.map((item) => ({
+    identifier: item.identifier || item.folder,
+    name: item.name || item.folder || item.identifier || '已禁用模组',
+    folder: item.folder,
+    relPath: item.relPath,
+    version: item.version || null,
+    installedVersion: item.version || null,
+    kspVersion: item.kspVersion || null,
+    managed: Boolean(item.managed),
+    managedBy: item.managedBy || 'manual',
+    size: item.size || null,
+    sizeLabel: item.sizeLabel || null,
+    dllCount: 0,
+    configCount: 0,
+    disabled: true,
+    disabledAt: item.disabledAt,
+    disabledRel: item.disabledRel,
+  }));
+  return {
+    installed,
+    entries: [...installed.entries, ...disabledEntries],
+    disabled,
+    updates,
+  };
+}
+
+function findInstalledEntry(runtime, identifier) {
+  const wanted = lower(identifier);
+  if (!wanted) return null;
+  return (runtime.scan?.entries || []).find((entry) => (
+    lower(entry.identifier) === wanted
+    || lower(entry.folder) === wanted
+    || lower(entry.name) === wanted
+    || lower(entry.id) === wanted
+  )) || null;
+}
+
+function isStockEntry(entry) {
+  return /^(Squad|SquadExpansion)$/i.test(String(entry?.folder || ''))
+    || /^Squad/i.test(String(entry?.identifier || ''));
+}
+
 
 function catalogLoaded(context) {
   return Boolean(context.catalogStore.catalog?.all?.length);
@@ -976,13 +1064,20 @@ async function handleApi(req, res, context, url) {
 
   if (method === 'GET' && pathname === '/api/installed') {
     const runtime = await getRuntime(context);
-    const installed = installedData(runtime.scan, runtime.registry);
+    const result = await installedFor(context, runtime);
     return sendJson(res, 200, {
       instance: runtime.instance,
       info: runtime.info,
       scan: runtime.scan,
       records: runtime.registry.records(),
-      installed: installed.entries,
+      installed: result.entries,
+      disabled: result.disabled,
+      updates: result.updates,
+      counts: {
+        total: result.installed.entries.length,
+        disabled: result.disabled.length,
+        updates: result.updates.length,
+      },
     });
   }
 
@@ -1037,6 +1132,106 @@ async function handleApi(req, res, context, url) {
       meta: { repairs: result.repairs.operations },
     });
     return sendJson(res, 202, { ok: true, job, plan, repairs: result.repairs });
+  }
+
+  if (method === 'POST' && pathname === '/api/mods/disable') {
+    const body = await readJsonBody(req);
+    const runtime = await getRuntime(context);
+    const entry = findInstalledEntry(runtime, body.identifier || body.id || body.folder);
+    if (!entry) throw new HttpError(404, '没有找到这个已安装模组。', 'MOD_NOT_FOUND');
+    if (isStockEntry(entry)) throw new HttpError(403, '原版游戏组件不能禁用。', 'STOCK_MOD');
+    const store = await getDisabledStore(context, runtime.instance.id);
+    const result = await disableMod({
+      kspPath: runtime.info.path,
+      entry,
+      store,
+      registry: runtime.registry,
+    });
+    invalidateScan(context, runtime.instance.id);
+    return sendJson(res, 200, { ok: true, disabled: result.manifest });
+  }
+
+  if (method === 'POST' && pathname === '/api/mods/enable') {
+    const body = await readJsonBody(req);
+    const runtime = await getRuntime(context);
+    const store = await getDisabledStore(context, runtime.instance.id);
+    const manifest = store.find({ identifier: body.identifier, folder: body.folder, id: body.id })
+      || store.get(lower(body.key));
+    if (!manifest) throw new HttpError(404, '没有找到这个已禁用模组。', 'DISABLED_NOT_FOUND');
+    const result = await enableMod({
+      kspPath: runtime.info.path,
+      manifest,
+      store,
+      registry: runtime.registry,
+    });
+    invalidateScan(context, runtime.instance.id);
+    return sendJson(res, 200, { ok: true, enabled: result });
+  }
+
+  if (method === 'POST' && pathname === '/api/mods/delete') {
+    const body = await readJsonBody(req);
+    const runtime = await getRuntime(context);
+    const store = await getDisabledStore(context, runtime.instance.id);
+    const manifest = store.find({ identifier: body.identifier, folder: body.folder, id: body.id })
+      || store.get(lower(body.key));
+    const entry = manifest ? null : findInstalledEntry(runtime, body.identifier || body.id || body.folder);
+    if (!manifest && !entry) throw new HttpError(404, '没有找到这个模组。', 'MOD_NOT_FOUND');
+    if (entry && isStockEntry(entry)) throw new HttpError(403, '原版游戏组件不能删除。', 'STOCK_MOD');
+    const trashDir = path.join(DATA_DIR, 'trash', runtime.instance.id);
+    const result = await removeModPath({
+      kspPath: runtime.info.path,
+      entry,
+      manifest,
+      trashDir,
+    });
+    if (manifest) await store.remove(manifest.key);
+    const record = runtime.registry.getByIdentifier(manifest?.identifier || entry?.identifier)
+      || (entry?.folder ? runtime.registry.getByFolder(entry.folder) : null);
+    if (record) await runtime.registry.remove(record.id);
+    invalidateScan(context, runtime.instance.id);
+    return sendJson(res, 200, {
+      ok: true,
+      identifier: manifest?.identifier || entry?.identifier || null,
+      moved: result.moved,
+      trashPath: result.trashPath,
+    });
+  }
+
+  if (method === 'POST' && pathname === '/api/mods/update') {
+    requireCatalog(context);
+    const body = await readJsonBody(req);
+    const runtime = await getRuntime(context);
+    const result = await installedFor(context, runtime);
+    const wanted = lower(body.identifier || body.id || '');
+    const updates = wanted
+      ? result.updates.filter((item) => lower(item.identifier) === wanted)
+      : result.updates;
+    if (!updates.length) {
+      return sendJson(res, 200, {
+        ok: true,
+        job: null,
+        updates: [],
+        message: wanted ? '这个模组已经是最新版本。' : '所有已安装模组都是最新版本。',
+      });
+    }
+    const roots = updates.map((item) => ({ identifier: item.identifier, version: item.latestVersion }));
+    const settings = context.configStore.get();
+    const { plan } = await resolveFor(context, roots, {
+      allowWarning: Boolean(settings.install.allowWarning),
+      allowUnknown: true,
+    });
+    if (!plan.ok) {
+      return sendJson(res, 422, {
+        error: { message: '更新计划没有通过依赖检查，未执行任何修改。', code: 'UPDATE_PLAN_FAILED' },
+        plan,
+        updates,
+      });
+    }
+    const job = await enqueueInstall(context, plan, {
+      title: wanted ? `更新 ${updates[0].name || updates[0].identifier}` : `一键更新 ${updates.length} 个模组`,
+      meta: { updates, kind: 'update' },
+    });
+    return sendJson(res, 202, { ok: true, job, plan, updates });
   }
 
   if (method === 'POST' && pathname === '/api/uninstall') {
@@ -1341,6 +1536,7 @@ async function createContext({ demoInfo = null } = {}) {
     jobs: new JobQueue({ concurrency: 1 }),
     scanCache: new Map(),
     registryCache: new Map(),
+    disabledCache: new Map(),
     uploads: new Map(),
     clients: new Set(),
     port: 0,
