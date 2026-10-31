@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,7 +16,7 @@ function option(name, fallback = null) {
 }
 
 if (hasFlag('--help') || hasFlag('-h')) {
-  console.log(`kanmod 0.0.1 — 坎巴拉太空计划 1 模组管理器
+  console.log(`kanmod 0.0.2 — 坎巴拉太空计划 1 模组管理器
 
 用法:
   node bin/kanmod.js                 启动并打开 kanmod
@@ -29,7 +30,7 @@ if (hasFlag('--help') || hasFlag('-h')) {
 }
 
 if (hasFlag('--version') || hasFlag('-v')) {
-  console.log('kanmod 0.0.1');
+  console.log('kanmod 0.0.2');
   process.exit(0);
 }
 
@@ -71,6 +72,24 @@ try {
 
 const { context, url } = started;
 const { DATA_DIR } = await import('../src/config.js');
+const runtimeFile = path.join(DATA_DIR, 'runtime.json');
+try {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(runtimeFile, JSON.stringify({
+    pid: process.pid,
+    port: context.port,
+    url,
+    version: '0.0.2',
+    appRoot: APP_ROOT,
+    startedAt: new Date().toISOString(),
+  }, null, 2), 'utf8');
+} catch (error) {
+  console.warn(`无法写入运行状态：${error.message}`);
+}
+function clearRuntime() {
+  try { fs.rmSync(runtimeFile, { force: true }); } catch { /* ignore */ }
+}
+process.on('exit', clearRuntime);
 console.log('');
 console.log('  kanmod 已启动');
 console.log(`  访问地址  ${url}`);

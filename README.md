@@ -1,8 +1,8 @@
 # kanmod
 
-坎巴拉太空计划 1（KSP 1）的本地模组管理器。零 npm 依赖，浏览器界面，数据全部保存在本机。
+坎巴拉太空计划 1（KSP 1）的本地模组管理器。Windows 安装器自带运行环境，不需要安装 Node.js；数据全部保存在本机。
 
-![kanmod](https://img.shields.io/badge/version-0.0.1-e11d2e) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.0.2-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -18,19 +18,36 @@
 
 ## 运行环境
 
-- Windows（主要目标；Node 代码本身可跨平台）
-- Node.js 20.11 或更高版本
+- Windows 10 / 11
+- 使用安装器时不需要安装 Node.js；从源码运行需要 Node.js 20.11 或更高版本
 - KSP 1（Steam、GOG 或手动安装均可）
-- 可选：Microsoft Edge（用于桌面窗口模式，没有则用默认浏览器）
+- 可选：Microsoft Edge（用于独立窗口模式，没有则使用默认浏览器）
 
-## 启动
+## 安装与启动
 
-```powershell
-# 正式模式：启动后自动打开 kanmod 窗口
-npm start
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.2.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+
+```text
+默认安装位置  %LOCALAPPDATA%\Programs\kanmod
+数据目录      %LOCALAPPDATA%\kanmod\data
+停止服务      kanmod.exe --stop
 ```
 
-或双击 `kanmod.cmd`。
+安装包自带 Node.js 运行时，不会修改系统环境变量。卸载时退出 kanmod 后删除安装目录即可，数据目录会保留。
+
+### 无法连接本地服务
+
+1. 从桌面或开始菜单重新打开 **kanmod**，不要直接访问旧的端口地址。
+2. 如果浏览器提示连接失败，先运行 `kanmod.exe --stop`，再重新打开。
+3. 检查 `%LOCALAPPDATA%\kanmod\data\launcher.log`；服务地址也会写入同目录的 `last-url.txt`。
+4. 端口 `4173` 被其他程序占用时，kanmod 会自动换端口；始终使用启动时打开的地址。
+
+### 从源码运行
+
+```powershell
+npm start          # 启动后自动打开窗口
+npm run demo       # 离线演示，不需要安装 KSP
+```
 
 ### 离线演示
 
@@ -53,11 +70,14 @@ node bin/kanmod.js --help
 
 ## 数据目录
 
-默认在项目的 `.data/`，可用环境变量 `KANMOD_DATA_DIR` 修改：
+安装版默认使用 `%LOCALAPPDATA%\kanmod\data`；从源码运行时默认使用项目的 `.data/`。可用环境变量 `KANMOD_DATA_DIR` 覆盖：
 
 ```text
-.data/
+data/
   config.json              实例、索引源、安装与网络设置
+  runtime.json             运行中的服务地址、端口和 PID
+  last-url.txt             最近一次启动地址
+  launcher.log             EXE 启动器错误日志
   token                    本地 API 启动令牌
   instances/<id>/registry.json
   downloads/               下载缓存
@@ -87,7 +107,7 @@ npm run check     # 语法检查
 项目结构：
 
 ```text
-bin/kanmod.js        启动器
+bin/kanmod.js        源码启动器
 server.js            本地 HTTP API、认证、SSE、静态 UI
 src/ksp/             KSP 检测、版本、GameData 扫描
 src/catalog/         CKAN 规范化、索引加载、依赖解析、下载源
@@ -96,11 +116,23 @@ src/diagnostics.js   依赖与日志诊断
 src/translate.js     翻译与缓存
 src/downloads.js     多源下载
 public/              原生 ES module SPA（无构建步骤）
+packaging/           Windows EXE 启动器与安装器（C#，无第三方依赖）
 test/                Node 内置测试
 ```
 
+## 构建 Windows 安装器
+
+需要 Windows 自带的 .NET Framework 4.8 编译器，不需要安装额外的打包工具：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+```
+
+产物位于 `.artifacts/build/kanmod-setup-0.0.2.exe`。安装器把应用和 Node.js 运行时释放到 `%LOCALAPPDATA%\Programs\kanmod`，数据单独保存在 `%LOCALAPPDATA%\kanmod\data`。
+
 ## 已知限制
 
+- 安装器未做代码签名，Windows SmartScreen 可能提示“未知发布者”；请核对下载来源为本仓库 Releases。
 - 当前版本只实现 KSP 1；KSP 2 的目录与元数据格式不同。
 - CurseForge 需要 API Key，配置项已保留，但尚未接入其下载 API。
 - 在线翻译依赖第三方公开端点，可能限流或不可用；失败会在界面显示并允许重试。

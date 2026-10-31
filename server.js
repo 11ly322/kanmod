@@ -22,7 +22,7 @@ import { ensureDir, pathExists, writeFileAtomic, formatBytes } from './src/util/
 import { safeFileName } from './src/util/paths.js';
 
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
-const APP_VERSION = '0.0.1';
+const APP_VERSION = '0.0.2';
 const MAX_JSON_BODY = 4 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const COOKIE_NAME = 'kanmod_token';
@@ -1246,11 +1246,15 @@ async function handle(req, res, context) {
       const queryToken = url.searchParams.get('token');
       if (queryToken) {
         if (!safeEqual(queryToken, context.token)) {
-          return sendJson(res, 403, { error: { message: '启动令牌无效。请使用终端里最新的 kanmod 链接。', code: 'BAD_TOKEN' } });
+          return sendJson(res, 403, { error: { message: '启动令牌无效。请重新打开 kanmod。', code: 'BAD_TOKEN' } });
         }
+        res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(context.token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`);
+        res.setHeader('Cache-Control', 'no-store');
+        return await serveStatic(req, res, '/index.html');
+      }
+      if (!authorized(req, context)) {
         res.writeHead(302, {
-          Location: '/',
-          'Set-Cookie': `${COOKIE_NAME}=${encodeURIComponent(context.token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`,
+          Location: `/?token=${encodeURIComponent(context.token)}`,
           'Cache-Control': 'no-store',
         });
         return res.end();
