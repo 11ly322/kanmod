@@ -2,6 +2,8 @@
 
 坎巴拉太空计划 1（KSP 1）的本地模组管理器。Windows 安装器自带运行环境，不需要安装 Node.js；数据全部保存在本机。
 
+官网：https://11ly322.github.io/kanmod/
+
 ![kanmod](https://img.shields.io/badge/version-0.0.2-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能

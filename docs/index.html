@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e11d2e">
+  <title>kanmod — 坎巴拉太空计划 1 模组管理器</title>
+  <meta name="description" content="kanmod 是 KSP 1 的本地模组管理器：自动补齐前置、检测版本兼容、读取 KSP.log 定位报错、多下载源回退，并把每一次安装都变得可回滚。">
+  <link rel="canonical" href="https://11ly322.github.io/kanmod/">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="kanmod">
+  <meta property="og:title" content="kanmod — 让每一次发射，少一次崩溃。">
+  <meta property="og:description" content="KSP 1 模组管理器。自动依赖、问题诊断、多源下载、中文翻译，本地运行。">
+  <meta property="og:url" content="https://11ly322.github.io/kanmod/">
+  <meta property="og:image" content="https://11ly322.github.io/kanmod/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="kanmod 0.0.2 — 让每一次发射，少一次崩溃。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://11ly322.github.io/kanmod/assets/og.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "kanmod",
+    "operatingSystem": "Windows 10, Windows 11",
+    "applicationCategory": "GameApplication",
+    "description": "坎巴拉太空计划 1 的本地模组管理器，支持依赖解析、问题诊断、多源下载和中文翻译。",
+    "softwareVersion": "0.0.2",
+    "url": "https://11ly322.github.io/kanmod/",
+    "downloadUrl": "https://github.com/11ly322/kanmod/releases/download/v0.0.2/kanmod-setup-0.0.2.exe",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <header class="site-header" id="top">
+    <div class="container nav-wrap">
+      <a class="brand" href="#top" aria-label="kanmod 首页">
+        <img src="assets/logo.svg" width="38" height="38" alt="">
+        <span class="brand-text">
+          <strong>kanmod</strong>
+          <small>KSP MOD MANAGER</small>
+        </span>
+      </a>
+
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#diagnose">问题诊断</a>
+        <a href="#interface">界面</a>
+        <a href="#download">安装</a>
+        <a href="#faq">FAQ</a>
+        <a class="nav-github" href="https://github.com/11ly322/kanmod" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.36 9.36 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.26 10.26 0 0 0 22 12.26C22 6.58 17.52 2 12 2Z" fill="currentColor"/></svg>
+          GitHub
+        </a>
+      </nav>
+
+      <a class="btn btn-primary btn-sm nav-download" href="#download">下载 0.0.2</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="hero-grid-bg" aria-hidden="true"></div>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow">
+            <span class="status-dot" aria-hidden="true"></span>
+            0.0.2 已发布 · Windows 10 / 11
+          </div>
+          <h1>让每一次发射，<br><em>少一次崩溃。</em></h1>
+          <p class="hero-lead">
+            kanmod 是坎巴拉太空计划 1 的本地模组管理器。它先替你补齐前置、核对版本，
+            再读取 <code>KSP.log</code> 把崩溃翻译成人话。点下安装，剩下的交给它。
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary btn-lg" href="https://github.com/11ly322/kanmod/releases/download/v0.0.2/kanmod-setup-0.0.2.exe">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4.5-4.5M12 14l-4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              下载 Windows 安装版
+            </a>
+            <a class="btn btn-ghost btn-lg" href="https://github.com/11ly322/kanmod" target="_blank" rel="noopener">
+              在 GitHub 查看
+            </a>
+          </div>
+          <ul class="hero-trust">
+            <li><strong>33 MB</strong><span>自带 Node.js</span></li>
+            <li><strong>0</strong><span>额外依赖</span></li>
+            <li><strong>127.0.0.1</strong><span>只在本地运行</span></li>
+          </ul>
+        </div>
+
+        <div class="hero-visual" aria-label="kanmod 总览界面截图">
+          <div class="hero-glow" aria-hidden="true"></div>
+          <div class="app-frame">
+            <div class="frame-bar">
+              <span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span>
+              <span class="frame-address">kanmod — 总览</span>
+            </div>
+            <div class="frame-shot">
+              <img src="assets/app-overview.png" width="1440" height="1000" alt="kanmod 总览：健康状态、任务队列和最近的游戏日志问题" fetchpriority="high">
+            </div>
+          </div>
+          <div class="float-card float-health">
+            <span class="float-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 20h18L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v5m0 2.8v.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </span>
+            <span><strong>4 个问题</strong><small>1 个可自动修复</small></span>
+          </div>
+          <div class="float-card float-ready">
+            <span class="float-check">✓</span>
+            <span><strong>前置已排好</strong><small>3 个模组 · 依赖顺序</small></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="container hero-bottom">
+        <span>为这些日常而做</span>
+        <div class="hero-bottom-tags">
+          <span>缺前置</span>
+          <span>版本不匹配</span>
+          <span>重复 DLL</span>
+          <span>日志看不懂</span>
+          <span>下载源失效</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section features" id="features">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">WHY KANMOD</span>
+          <h2>装模组不该是一场考古。</h2>
+          <p>把 CKAN 元数据、版本约束和游戏日志放在一起看，很多“玄学崩溃”其实都有明确答案。</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6v6H4zM14 11h6v6h-6zM10 10h4M7 13v3h7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3>前置自动补齐</h3>
+            <p>递归解析硬依赖、版本范围和虚拟 <code>provides</code>，先装前置，再装目标，顺序不会乱。</p>
+            <span class="feature-note">DEPENDENCY GRAPH</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h6M7 13h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m15 14 2 2 3-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3>报错先诊断</h3>
+            <p>读取 <code>KSP.log</code> 和 Unity 输出，定位缺失程序集、异常堆栈和重复 DLL，而不是让你猜。</p>
+            <span class="feature-note">LOG DIAGNOSTICS</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3>多下载源回退</h3>
+            <p>CKAN 直链、镜像前缀、GitHub Releases、SpaceDock 依次尝试，失败记录保留，支持 SHA256 校验。</p>
+            <span class="feature-note">MULTI-SOURCE</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.3 8 10 4.6-1.7 8-5 8-10V6l-8-3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3>安装可回滚</h3>
+            <p>覆盖前备份，写盘失败自动回滚；卸载只移动到回收站，不直接删除你的游戏文件。</p>
+            <span class="feature-note">SAFE INSTALL</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h10M4 10h7M4 15h10M4 20h7M17 4v16m0-12 3 3m-3-3-3 3m3 9 3-3m-3 3-3-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3>自动翻译简介</h3>
+            <p>打开英文模组页时自动翻译简介，完整说明按需翻译；结果缓存到本地，离线演示也有内置中文。</p>
+            <span class="feature-note">ZH-CN TRANSLATION</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 9h8M8 13h5M8 17h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </span>
+            <h3>本地优先</h3>
+            <p>只监听 <code>127.0.0.1</code>，API 带启动令牌；索引、下载、翻译缓存都在你自己的电脑上。</p>
+            <span class="feature-note">LOCAL FIRST</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section diagnose" id="diagnose">
+      <div class="container split">
+        <div class="split-copy reveal">
+          <span class="kicker">DIAGNOSE / REPAIR</span>
+          <h2>不是把日志扔给你，<br>是告诉你哪颗螺丝松了。</h2>
+          <p>
+            安装失败、游戏闪退、模组不生效——kanmod 会把依赖关系、版本约束和日志堆栈放在同一张诊断桌上。
+            能安全修复的直接给出修复计划，不能自动处理的明确标出来。
+          </p>
+
+          <ul class="check-list">
+            <li><span>01</span><div><strong>缺前置</strong><p>找到满足版本约束的包，自动加入安装计划。</p></div></li>
+            <li><span>02</span><div><strong>版本与 KSP 不兼容</strong><p>默认只选择兼容版本，警告和未知版本需要你确认。</p></div></li>
+            <li><span>03</span><div><strong>日志异常</strong><p>按错误签名聚合，关联到具体模组和文件路径。</p></div></li>
+            <li><span>04</span><div><strong>重复 DLL</strong><p>跨 GameData 检测同名程序集，指出冲突来源。</p></div></li>
+          </ul>
+        </div>
+
+        <div class="diagnose-visual reveal">
+          <div class="diag-card">
+            <div class="diag-head">
+              <div class="diag-title">
+                <span class="diag-mark">!</span>
+                <div><strong>KSP.log 诊断</strong><small>最近 4 MB · 3 个错误签名</small></div>
+              </div>
+              <span class="pill pill-red">4 个问题</span>
+            </div>
+            <pre class="log-box" aria-label="示例 KSP.log"><code><span class="log-dim">[LOG 21:04:12]</span> <span class="log-err">[ERR]</span> Missing assembly Harmony
+<span class="log-dim">[LOG 21:04:13]</span> <span class="log-err">[EXC]</span> FileNotFoundException: Could not load file or assembly '0Harmony'
+<span class="log-dim">[LOG 21:04:14]</span> <span class="log-warn">[WRN]</span> [DemoBroken] plugin will not load: dependency missing
+<span class="log-dim">[LOG 21:04:15]</span> <span class="log-info">[LOG]</span> Scene load: MAINMENU</code></pre>
+            <div class="diag-issues">
+              <div class="diag-issue">
+                <span class="issue-dot issue-red"></span>
+                <div><strong>缺少前置：Harmony</strong><small>DemoBroken 需要 Harmony ≥ 2.0.0</small></div>
+                <span class="mini-action">可修复</span>
+              </div>
+              <div class="diag-issue">
+                <span class="issue-dot issue-red"></span>
+                <div><strong>程序集加载失败</strong><small>0Harmony.dll · 关联模组 DemoBroken</small></div>
+                <span class="mini-action">定位到</span>
+              </div>
+              <div class="diag-issue">
+                <span class="issue-dot issue-amber"></span>
+                <div><strong>旧版本兼容提示</strong><small>OldParts 声明 KSP 1.10.1</small></div>
+                <span class="mini-action">查看</span>
+              </div>
+            </div>
+            <div class="diag-foot">
+              <span>修复计划：安装 Harmony 2.2.1</span>
+              <span class="btn btn-primary btn-xs">执行安全修复</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section dependency" id="dependency">
+      <div class="container split split-reverse">
+        <div class="plan-visual reveal">
+          <div class="plan-card">
+            <div class="plan-head">
+              <div><span class="kicker">INSTALL PLAN</span><h3>KSP Community Fixes</h3></div>
+              <span class="pill">3 个模组</span>
+            </div>
+            <div class="plan-row">
+              <span class="plan-order">1</span>
+              <span class="plan-box">ModuleManager<small>4.2.3 · 前置</small></span>
+              <span class="plan-state">依赖</span>
+            </div>
+            <div class="plan-line" aria-hidden="true"></div>
+            <div class="plan-row">
+              <span class="plan-order">2</span>
+              <span class="plan-box">Harmony<small>2.2.1 · 前置</small></span>
+              <span class="plan-state">依赖</span>
+            </div>
+            <div class="plan-line" aria-hidden="true"></div>
+            <div class="plan-row">
+              <span class="plan-order">3</span>
+              <span class="plan-box plan-target">KSPCommunityFixes<small>1.35.2 · 目标模组</small></span>
+              <span class="plan-state plan-state-red">安装</span>
+            </div>
+            <div class="plan-foot">
+              <span>依赖顺序已排好</span>
+              <span>3 个下载源待命</span>
+            </div>
+          </div>
+          <div class="plan-stamp">先前置，后主体</div>
+        </div>
+
+        <div class="split-copy reveal">
+          <span class="kicker">ONE CLICK, IN ORDER</span>
+          <h2>点一下安装，<br>前置自己排队。</h2>
+          <p>
+            kanmod 读取 CKAN 的 <code>depends</code> 字段，沿着依赖图递归找到所有必需模组，
+            再根据你的 KSP 版本挑选兼容版本。你看到的是安装计划，不是一堆需要手动搜索的名字。
+          </p>
+          <div class="mini-stats">
+            <div><strong>递归</strong><span>解析硬依赖</span></div>
+            <div><strong>版本</strong><span>过滤不兼容项</span></div>
+            <div><strong>顺序</strong><span>依赖先于使用者</span></div>
+          </div>
+          <a class="text-link" href="#interface">看看实际界面 <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section interface" id="interface">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">THE INTERFACE</span>
+          <h2>信息都在，噪音不在。</h2>
+          <p>白底红点缀，中文界面。总览先告诉你哪里有问题，再给你下一步动作。</p>
+        </div>
+
+        <div class="shot-stack">
+          <figure class="shot-main reveal">
+            <div class="shot-browser">
+              <span></span><span></span><span></span>
+              <em>总览 / Overview</em>
+            </div>
+            <img src="assets/app-overview.png" width="1440" height="1000" loading="lazy" alt="kanmod 总览界面，包含健康分、待处理问题和任务队列">
+            <figcaption>健康状态、最近日志和修复入口都在一屏里。</figcaption>
+          </figure>
+
+          <figure class="shot-side reveal">
+            <div class="shot-browser">
+              <span></span><span></span><span></span>
+              <em>模组简介 / Mod page</em>
+            </div>
+            <img src="assets/app-mod.png" width="1440" height="1108" loading="lazy" alt="kanmod 模组简介界面，包含中文翻译、依赖关系和可用版本">
+            <figcaption>英文简介自动翻译，依赖与关联就在手边。</figcaption>
+          </figure>
+        </div>
+
+        <div class="ui-points">
+          <div><strong>总览</strong><span>先看问题，再看动作</span></div>
+          <div><strong>模组库</strong><span>按兼容性筛选，带前置计划</span></div>
+          <div><strong>诊断</strong><span>日志错误聚合，一键安全修复</span></div>
+          <div><strong>下载队列</strong><span>进度、日志、取消都在这里</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section download" id="download">
+      <div class="container">
+        <div class="download-panel reveal">
+          <div class="download-copy">
+            <span class="kicker kicker-light">READY FOR LAUNCH</span>
+            <h2>把下一次崩溃，<br>留在这次之前。</h2>
+            <p>安装包自带运行环境，不需要 Node.js，也不需要打开命令行。双击安装，然后从桌面启动。</p>
+            <div class="download-actions">
+              <a class="btn btn-white btn-lg" href="https://github.com/11ly322/kanmod/releases/download/v0.0.2/kanmod-setup-0.0.2.exe">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4.5-4.5M12 14l-4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                下载 kanmod 0.0.2
+              </a>
+              <a class="btn btn-outline-light btn-lg" href="https://github.com/11ly322/kanmod/releases" target="_blank" rel="noopener">所有版本</a>
+            </div>
+            <div class="download-meta">
+              <span>Windows 10 / 11</span><span>33 MB</span><span>v0.0.2</span><span>MIT License</span>
+            </div>
+          </div>
+
+          <div class="install-steps">
+            <div class="step">
+              <span class="step-num">01</span>
+              <div><strong>运行安装器</strong><p>下载 <code>kanmod-setup-0.0.2.exe</code>，按提示安装到默认目录。</p></div>
+            </div>
+            <div class="step">
+              <span class="step-num">02</span>
+              <div><strong>启动 kanmod</strong><p>桌面快捷方式会启动本地服务并自动打开界面。</p></div>
+            </div>
+            <div class="step">
+              <span class="step-num">03</span>
+              <div><strong>选择 KSP 目录</strong><p>kanmod 会扫描 Steam 库；也可以直接选择包含 <code>GameData</code> 的目录。</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="download-foot">
+          <div>
+            <strong>安装包 SHA256</strong>
+            <code>de770129e202671b3ac67f0cd74171cd37486056cbe98468168e08edfc0af0be</code>
+          </div>
+          <div class="download-note">
+            <span>未做代码签名，SmartScreen 可能提示“未知发布者”。</span>
+            <a href="https://github.com/11ly322/kanmod/releases/tag/v0.0.2" target="_blank" rel="noopener">查看发布说明</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section faq" id="faq">
+      <div class="container faq-grid">
+        <div class="faq-head">
+          <span class="kicker">FAQ</span>
+          <h2>安装之前，<br>你可能想知道。</h2>
+          <p>还有问题？去 <a href="https://github.com/11ly322/kanmod/issues" target="_blank" rel="noopener">GitHub Issues</a> 开一个。</p>
+        </div>
+        <div class="faq-list">
+          <details open>
+            <summary>需要先安装 Node.js 吗？</summary>
+            <p>不需要。Windows 安装包已经包含运行环境，安装后直接启动 <code>kanmod.exe</code>。从源码运行才需要 Node.js 20.11+。</p>
+          </details>
+          <details>
+            <summary>它支持 Steam、GOG 和手动安装的 KSP 吗？</summary>
+            <p>支持。kanmod 会扫描常见 Steam 库和安装目录，也可以手动选择任何包含 <code>GameData</code> 的 KSP 1 目录。</p>
+          </details>
+          <details>
+            <summary>安装模组会改坏游戏吗？</summary>
+            <p>覆盖前会备份，写盘失败会回滚；卸载是把文件移动到回收站，而不是直接删除。仍然建议你在大规模安装前备份存档。</p>
+          </details>
+          <details>
+            <summary>为什么启动时浏览器提示无法连接？</summary>
+            <p>请从桌面或开始菜单重新打开 kanmod，不要访问旧的端口地址。仍失败时运行 <code>kanmod.exe --stop</code> 后再启动；日志在 <code>%LOCALAPPDATA%\kanmod\data\launcher.log</code>。</p>
+          </details>
+          <details>
+            <summary>自动翻译用的是什么？</summary>
+            <p>优先使用本地缓存和内置演示翻译；需要联网时调用 Google / MyMemory 公开翻译端点。机器翻译仅供参考。</p>
+          </details>
+          <details>
+            <summary>支持 KSP 2 吗？</summary>
+            <p>目前只支持 KSP 1。KSP 2 的目录结构和模组生态不同，不在当前版本的范围内。</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing">
+      <div class="container closing-inner">
+        <img src="assets/logo.svg" width="44" height="44" alt="">
+        <p>下一次点火，别再和前置依赖较劲。</p>
+        <a class="btn btn-primary" href="https://github.com/11ly322/kanmod/releases/download/v0.0.2/kanmod-setup-0.0.2.exe">下载 kanmod 0.0.2</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top">
+          <img src="assets/logo.svg" width="32" height="32" alt="">
+          <span class="brand-text"><strong>kanmod</strong><small>KSP MOD MANAGER</small></span>
+        </a>
+        <p>为 KSP 1 做的本地模组管理器。开源、免费、数据留在本机。</p>
+      </div>
+      <div class="footer-links">
+        <strong>项目</strong>
+        <a href="https://github.com/11ly322/kanmod" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/11ly322/kanmod/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/11ly322/kanmod/issues" target="_blank" rel="noopener">Issues</a>
+      </div>
+      <div class="footer-links">
+        <strong>文档</strong>
+        <a href="#download">安装指南</a>
+        <a href="#faq">常见问题</a>
+        <a href="https://github.com/11ly322/kanmod/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© 2026 kanmod · 非官方粉丝项目，与 Squad / Private Division 无关。</span>
+      <span>KSP 是 Squad 的商标。</span>
+    </div>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
