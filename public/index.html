@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <title>kanmod · KSP 模组管理器</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div class="boot-screen" role="status" aria-live="polite">
+      <span class="brand-mark" aria-hidden="true">K<span></span></span>
+      <div>
+        <strong>kanmod</strong>
+        <p>正在连接本地服务…</p>
+      </div>
+      <span class="spinner" aria-hidden="true"></span>
+    </div>
+  </div>
+  <div id="drawer-root"></div>
+  <div id="modal-root"></div>
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="false"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

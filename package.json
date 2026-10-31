@@ -1,0 +1,16 @@
+{
+  "name": "kanmod",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "kanmod - Kerbal Space Program 1 mod manager and diagnostics cockpit",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "node bin/kanmod.js",
+    "demo": "node bin/kanmod.js --demo",
+    "test": "node test/run.js",
+    "check": "node --check server.js && node --check public/app.js"
+  }
+}

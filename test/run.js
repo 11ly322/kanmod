@@ -1,0 +1,6 @@
+// Run every test file in one process. The node:test child-process runner can be
+// blocked by restricted sandboxes, so this keeps `npm test` usable everywhere.
+import './version.test.js';
+import './catalog.test.js';
+import './installer.test.js';
+import './translate.test.js';
