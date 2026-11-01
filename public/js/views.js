@@ -924,6 +924,7 @@ export function settingsHtml() {
   const network = s.network || {};
   const catalog = s.catalog || {};
   const ui = s.ui || {};
+  const darkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
   const catalogStatus = data.catalog || {};
   const enabled = new Set(catalog.enabledSources || ['official']);
   const customSources = catalog.customSources || [];
@@ -1021,12 +1022,16 @@ export function settingsHtml() {
           <p class="section-desc">界面只保存轻量偏好，不包含账号信息。</p>
           <div class="field"><label for="pageSize">模组库每页数量</label><input id="pageSize" name="pageSize" type="number" min="6" max="96" value="${esc(ui.pageSize || 24)}"></div>
           ${switchRow('autoTranslate', '自动翻译标题、标签和简介', '打开模组简介时自动翻译标题和英文简介，标签使用内置中文词典。机器翻译仅供参考，原文始终保留。', ui.autoTranslate !== false)}
+          <div class="switch-row">
+            <span class="switch-copy"><strong>深色主题</strong><small>切换界面配色，偏好保存在本机浏览器。</small></span>
+            <span class="switch"><input id="theme-dark" type="checkbox" ${darkTheme ? 'checked' : ''}><span></span></span>
+          </div>
           <div class="divider"></div>
           <div class="field">
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本（包含测试版）。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.5')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.51')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1041,7 +1046,7 @@ export function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.1.5')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.1.51')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>

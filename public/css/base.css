@@ -12,6 +12,36 @@
   --line-strong: #ddd5d9;
   --bg: #fbfaf9;
   --panel: #ffffff;
+  --panel-soft: #fdfbfb;
+  --panel-hover: #fcf9fa;
+  --surface: #f7f4f5;
+  --surface-2: #f2edef;
+  --surface-3: #faf8f8;
+  --hover: #f7f3f4;
+  --row-hover: #fefcfc;
+  --row-disabled: #fbf7f7;
+  --code-bg: #faf7f8;
+  --code-ink: #5b5055;
+  --input-bg: #ffffff;
+  --on-red: #ffffff;
+  --line-red: #f2c9ce;
+  --line-red-strong: #e7aab2;
+  --selection-bg: #ffd7dc;
+  --switch-track: #ddd5d9;
+  --switch-knob: #ffffff;
+  --overlay: rgba(28, 22, 25, .24);
+  --panel-translucent: rgba(255, 255, 255, .88);
+  --panel-glass: rgba(255, 255, 255, .94);
+  --graph-fill: #ffffff;
+  --graph-line: #ded8db;
+  --graph-line-red: #f0b6bd;
+  --graph-glow: #ffffff;
+  --bg-translucent: rgba(251, 250, 249, .9);
+  --shimmer: rgba(255, 255, 255, .65);
+  --hero-from: #ffffff;
+  --hero-to: #fffafa;
+  --hero-glow: #ffe3e7;
+  --lightbox-bg: #171213;
   --green: #167a55;
   --green-soft: #effaf4;
   --amber: #9a5a06;
@@ -40,7 +70,7 @@ button { cursor: pointer; }
 a { color: var(--red); text-decoration: none; }
 a:hover { text-decoration: underline; }
 svg { display: block; }
-::selection { background: #ffd7dc; color: var(--red-deep); }
+::selection { background: var(--selection-bg); color: var(--red-deep); }
 :focus-visible { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 6px; }
 
 .boot-screen {
@@ -51,7 +81,7 @@ svg { display: block; }
   gap: 16px;
   padding: 24px;
   background:
-    radial-gradient(900px 500px at 50% 0%, #fff 0%, transparent 70%),
+    radial-gradient(900px 500px at 50% 0%, var(--panel) 0%, transparent 70%),
     var(--bg);
 }
 .boot-screen strong { font-size: 17px; letter-spacing: -.02em; }

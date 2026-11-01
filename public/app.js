@@ -30,6 +30,7 @@ export function renderApp() {
   if (!app) return;
   const active = state.bootstrap.instance;
   const scan = state.bootstrap.scan;
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const nav = [
     ['overview', '总览'], ['library', '模组库'], ['installed', '已安装'],
@@ -66,7 +67,7 @@ export function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.1.5')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.1.51')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -83,6 +84,7 @@ export function renderApp() {
             ${active ? `<button class="btn primary sm" type="button" data-action="launch-game">${icon('rocket', 15)}启动游戏</button>` : ''}
             ${active ? `<button class="btn ghost sm" type="button" data-action="refresh-scan">${icon('refresh', 15)}扫描模组</button>` : ''}
             <button class="btn icon ghost" type="button" data-action="trigger-archive" title="安装本地安装包" aria-label="安装本地安装包">${icon('upload')}</button>
+            <button class="btn icon ghost" type="button" data-action="toggle-theme" title="切换深色/浅色主题" aria-label="切换深色/浅色主题" aria-pressed="${dark}">${icon(dark ? 'sun' : 'moon')}</button>
             <button class="btn icon ghost" type="button" data-action="navigate" data-view="settings" title="设置" aria-label="设置">${icon('settings')}</button>
           </div>
         </header>
@@ -410,6 +412,12 @@ export function setupEvents() {
         case 'check-update':
           await checkAppUpdate(actionNode);
           break;
+        case 'toggle-theme': {
+          const next = window.kanmodTheme?.toggle?.() || 'light';
+          renderApp();
+          toast(next === 'dark' ? '已切换到深色主题' : '已切换到浅色主题', 'success');
+          break;
+        }
         case 'cache-status':
           await showCacheStatus();
           break;
@@ -527,6 +535,12 @@ export function setupEvents() {
   });
 
   document.addEventListener('change', async (event) => {
+    if (event.target.id === 'theme-dark') {
+      const next = window.kanmodTheme?.set?.(event.target.checked ? 'dark' : 'light') || (event.target.checked ? 'dark' : 'light');
+      renderApp();
+      toast(next === 'dark' ? '已切换到深色主题' : '已切换到浅色主题', 'success');
+      return;
+    }
     if (event.target.id === 'batch-all') {
       document.querySelectorAll('.row-select').forEach((input) => { input.checked = event.target.checked; });
       syncBatchSelection();

@@ -21,7 +21,7 @@ const LOCK_FILE = path.join(DATA_DIR, 'supervisor.json');
 const LOG_FILE = path.join(DATA_DIR, 'supervisor.log');
 const RUNTIME_FILE = path.join(DATA_DIR, 'runtime.json');
 const CHILD_ENTRY = path.join(APP_ROOT, 'bin', 'kanmod.js');
-const APP_VERSION = '0.1.5';
+const APP_VERSION = '0.1.51';
 
 let child = null;
 let stopping = false;

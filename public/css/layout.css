@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   padding: 22px 16px 16px;
-  background: rgba(255, 255, 255, .88);
+  background: var(--panel-translucent);
   border-right: 1px solid var(--line);
   backdrop-filter: blur(14px);
   z-index: 20;
@@ -31,7 +31,7 @@
   place-items: center;
   border-radius: 10px;
   background: var(--red);
-  color: #fff;
+  color: var(--on-red);
   font-weight: 850;
   font-size: 19px;
   letter-spacing: -.06em;
@@ -45,7 +45,7 @@
   right: -4px;
   bottom: 7px;
   border-radius: 3px;
-  background: #fff;
+  background: var(--panel);
   transform: rotate(-38deg);
   opacity: .9;
 }
@@ -69,7 +69,7 @@
   transition: background .16s, color .16s;
 }
 .nav-item svg { color: var(--muted); transition: color .16s; }
-.nav-item:hover { background: #f7f3f4; color: var(--ink); }
+.nav-item:hover { background: var(--hover); color: var(--ink); }
 .nav-item.active { background: var(--red-soft); color: var(--red-dark); font-weight: 650; }
 .nav-item.active svg { color: var(--red); }
 .nav-item .nav-count {
@@ -78,7 +78,7 @@
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--red);
-  color: #fff;
+  color: var(--on-red);
   text-align: center;
   font-size: 10px;
   font-weight: 700;
@@ -92,13 +92,13 @@
   padding: 11px;
   border: 1px solid var(--line);
   border-radius: 13px;
-  background: #fff;
+  background: var(--panel);
   text-align: left;
   box-shadow: var(--shadow-sm);
 }
 .instance-card:hover { border-color: var(--line-strong); }
 .instance-card .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: 0 0 auto; box-shadow: 0 0 0 3px var(--green-soft); }
-.instance-card .status-dot.off { background: var(--muted-2); box-shadow: 0 0 0 3px #f3f1f2; }
+.instance-card .status-dot.off { background: var(--muted-2); box-shadow: 0 0 0 3px var(--surface-2); }
 .instance-copy { min-width: 0; display: flex; flex-direction: column; }
 .instance-copy strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .instance-copy small { font-size: 10px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -109,7 +109,7 @@
   align-items: center;
   gap: 5px;
   padding: 2px 7px;
-  border: 1px solid #f3c7cd;
+  border: 1px solid var(--line-red);
   border-radius: 999px;
   background: var(--red-faint);
   color: var(--red-dark);
@@ -130,7 +130,7 @@
   min-height: 82px;
   padding: 16px 32px;
   border-bottom: 1px solid var(--line);
-  background: rgba(251, 250, 249, .9);
+  background: var(--bg-translucent);
   backdrop-filter: blur(16px);
 }
 .topbar h1 { margin: 0; font-size: 22px; letter-spacing: -.035em; font-weight: 760; }

@@ -1,0 +1,135 @@
+/* Dark theme. Loaded last so it overrides the light palette tokens. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  scrollbar-color: #4a3f42 transparent;
+  --red: #ff4d5e;
+  --red-dark: #ff8b96;
+  --red-deep: #ffc2c8;
+  --red-soft: rgba(255, 77, 94, .13);
+  --red-faint: rgba(255, 77, 94, .07);
+  --ink: #f2ece9;
+  --ink-2: #d6ccc9;
+  --muted: #c4b9b6;
+  --muted-2: #a89d9a;
+  --line: #2f2729;
+  --line-strong: #443a3d;
+  --bg: #131011;
+  --panel: #1c1718;
+  --panel-soft: #211b1d;
+  --panel-hover: #261f21;
+  --surface: #241e20;
+  --surface-2: #2b2427;
+  --surface-3: #221c1e;
+  --hover: #2a2325;
+  --row-hover: #221c1e;
+  --row-disabled: #1a1516;
+  --code-bg: #221c1e;
+  --code-ink: #cdc1be;
+  --input-bg: #171213;
+  --on-red: #2b1013;
+  --line-red: #4a2a2f;
+  --line-red-strong: #7d3d46;
+  --selection-bg: rgba(255, 77, 94, .35);
+  --switch-track: #3a3033;
+  --switch-knob: #f2ece9;
+  --overlay: rgba(0, 0, 0, .64);
+  --panel-translucent: rgba(23, 18, 19, .88);
+  --panel-glass: rgba(28, 23, 24, .95);
+  --bg-translucent: rgba(19, 16, 17, .9);
+  --graph-fill: #241e20;
+  --graph-line: #443a3d;
+  --graph-line-red: #7d3d46;
+  --graph-glow: #221c1e;
+  --shimmer: rgba(255, 255, 255, .06);
+  --hero-from: #201a1c;
+  --hero-to: #1a1415;
+  --hero-glow: rgba(255, 77, 94, .16);
+  --lightbox-bg: #0b0909;
+  --green: #55d6a6;
+  --green-soft: rgba(34, 197, 94, .13);
+  --green-line: rgba(34, 197, 94, .3);
+  --amber: #f0b45a;
+  --amber-soft: rgba(240, 180, 90, .12);
+  --amber-line: rgba(240, 180, 90, .28);
+  --blue: #7cb3ff;
+  --blue-soft: rgba(96, 165, 250, .12);
+  --blue-line: rgba(96, 165, 250, .28);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45), 0 6px 18px rgba(0, 0, 0, .32);
+  --shadow-md: 0 24px 64px rgba(0, 0, 0, .58);
+}
+
+:root[data-theme="dark"] body { background: var(--bg); }
+
+:root[data-theme="dark"] ::selection { background: var(--selection-bg); color: var(--ink); }
+
+:root[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+:root[data-theme="dark"] ::-webkit-scrollbar-track { background: transparent; }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3a3033; border-radius: 999px; border: 2px solid var(--bg); }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #4c4043; }
+
+:root[data-theme="dark"] .hero {
+  border-color: var(--line-red);
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-theme="dark"] .hero-mark { color: var(--line-red-strong); opacity: .55; }
+
+:root[data-theme="dark"] .topbar { border-bottom-color: var(--line); }
+
+:root[data-theme="dark"] .btn.ghost,
+:root[data-theme="dark"] .btn.soft,
+:root[data-theme="dark"] .btn.danger { color: var(--ink-2); }
+
+:root[data-theme="dark"] .btn.primary { box-shadow: 0 6px 18px rgba(255, 77, 94, .28); }
+
+:root[data-theme="dark"] .field input:focus,
+:root[data-theme="dark"] .field textarea:focus,
+:root[data-theme="dark"] .field select:focus,
+:root[data-theme="dark"] .search input:focus {
+  box-shadow: 0 0 0 3px rgba(255, 77, 94, .18);
+}
+
+:root[data-theme="dark"] .mod-card:hover {
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
+}
+
+:root[data-theme="dark"] .issue-card,
+:root[data-theme="dark"] .job-card,
+:root[data-theme="dark"] .metric { box-shadow: var(--shadow-sm); }
+
+:root[data-theme="dark"] .toast,
+:root[data-theme="dark"] .modal { box-shadow: var(--shadow-md); }
+
+:root[data-theme="dark"] .lightbox-stage { background: var(--lightbox-bg); }
+
+:root[data-theme="dark"] .graph-node rect { stroke: var(--line-strong); }
+:root[data-theme="dark"] .graph-node.center rect { fill: var(--red); }
+:root[data-theme="dark"] .graph-node.center text { fill: var(--on-red); }
+
+:root[data-theme="dark"] .badge.muted { background: var(--surface); color: var(--muted-2); }
+
+:root[data-theme="dark"] .badge.bad {
+  background: rgba(255, 77, 94, .2);
+  border-color: rgba(255, 77, 94, .42);
+  color: #ffc9ce;
+}
+
+:root[data-theme="dark"] .badge.red,
+:root[data-theme="dark"] .pill.red,
+:root[data-theme="dark"] .tag.red {
+  color: var(--on-red);
+}
+
+:root[data-theme="dark"] .search input::placeholder { color: var(--muted-2); }
+
+:root[data-theme="dark"] .field input::placeholder,
+:root[data-theme="dark"] .field textarea::placeholder { color: var(--muted-2); }
+
+:root[data-theme="dark"] img { color-scheme: dark; }
+
+:root[data-theme="dark"] .btn.soft {
+  background: rgba(255, 77, 94, .15);
+  color: #ffe3e6;
+}
+
+:root[data-theme="dark"] .btn.soft:hover { background: rgba(255, 77, 94, .26); }

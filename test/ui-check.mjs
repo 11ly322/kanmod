@@ -191,6 +191,31 @@ if (!offersRetry || !retriedOk) {
   exceptions.push('plan retry flow failed');
 }
 
+// Theme switch: the dark palette must win, persist across a reload and switch back.
+await evaluate(`document.querySelector('[data-action="toggle-theme"]')?.click()`);
+await sleep(600);
+const themeState = JSON.parse(await evaluate(`(() => {
+  const bg = getComputedStyle(document.body).backgroundColor;
+  const m = /rgb\\((\\d+), (\\d+), (\\d+)\\)/.exec(bg);
+  return JSON.stringify({
+    theme: document.documentElement.dataset.theme,
+    bg,
+    darkBg: m ? (Number(m[1]) + Number(m[2]) + Number(m[3])) < 220 : false,
+    stored: localStorage.getItem('kanmod-theme'),
+    pressed: document.querySelector('[data-action="toggle-theme"]')?.getAttribute('aria-pressed')
+  });
+})()`));
+await send('Page.reload');
+await sleep(3200);
+const themePersisted = await evaluate('document.documentElement.dataset.theme');
+await evaluate(`document.querySelector('[data-action="toggle-theme"]')?.click()`);
+await sleep(500);
+const themeLight = await evaluate('document.documentElement.dataset.theme');
+console.log('theme:', JSON.stringify({ ...themeState, persisted: themePersisted, backToLight: themeLight }));
+if (!(themeState.theme === 'dark' && themeState.darkBg && themePersisted === 'dark' && themeLight === 'light')) {
+  exceptions.push('theme toggle failed');
+}
+
 console.log('dom bytes:', String(snapshot || '').length);
 console.log('markers:', markers);
 console.log('exceptions:', exceptions.slice(0, 5));

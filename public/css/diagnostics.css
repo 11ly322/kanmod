@@ -7,10 +7,10 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: conic-gradient(var(--red) calc(var(--score) * 1%), #f2edef 0);
+  background: conic-gradient(var(--red) calc(var(--score) * 1%), var(--surface-2) 0);
   position: relative;
 }
-.health-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: #fff; }
+.health-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--panel); }
 .health-ring .score { position: relative; z-index: 1; text-align: center; }
 .health-ring .score strong { display: block; font-size: 24px; line-height: 1; letter-spacing: -.05em; }
 .health-ring .score small { color: var(--muted-2); font-size: 9px; }
@@ -18,9 +18,9 @@
 .health-copy p { margin: 0 0 9px; color: var(--muted); font-size: 11.5px; }
 .health-counts { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.issue-card { border: 1px solid var(--line); border-radius: 13px; background: #fff; padding: 15px; box-shadow: var(--shadow-sm); }
+.issue-card { border: 1px solid var(--line); border-radius: 13px; background: var(--panel); padding: 15px; box-shadow: var(--shadow-sm); }
 .issue-card + .issue-card { margin-top: 9px; }
 .issue-card .issue-main { display: flex; gap: 10px; }
 .issue-card .issue-detail { margin: 7px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
 .issue-card .issue-footer { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.code-context { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: #faf7f8; border: 1px solid var(--line); color: #5b5055; font-family: var(--mono); font-size: 10px; line-height: 1.55; overflow-x: auto; white-space: pre; }
+.code-context { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: var(--code-bg); border: 1px solid var(--line); color: var(--code-ink); font-family: var(--mono); font-size: 10px; line-height: 1.55; overflow-x: auto; white-space: pre; }

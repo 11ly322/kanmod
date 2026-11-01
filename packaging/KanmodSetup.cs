@@ -14,13 +14,13 @@ using Kanmod.Installer;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.1.5.0")]
-[assembly: AssemblyFileVersion("0.1.5.0")]
-[assembly: AssemblyInformationalVersion("0.1.5")]
+[assembly: AssemblyVersion("0.1.51.0")]
+[assembly: AssemblyFileVersion("0.1.51.0")]
+[assembly: AssemblyInformationalVersion("0.1.51")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.1.5";
+    internal const string AppVersion = "0.1.51";
 
     [STAThread]
     private static int Main(string[] args)
