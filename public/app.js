@@ -390,7 +390,7 @@ function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.0.7')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.0.71')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -804,7 +804,7 @@ function libraryBodyHtml() {
   }
   return `<div class="results-meta">
       <span>共 ${fmtNumber(data.total)} 个模组 · 第 ${data.page} / ${data.pageCount} 页</span>
-      <span>${lib.loading ? '<span class="spinner"></span> 更新中…' : esc(state.bootstrap.catalog?.sourceName || '社区模组索引')}</span>
+      <span>${lib.loading ? '<span class="spinner"></span> 更新中…' : esc(sourceNameLabel(state.bootstrap.catalog?.sourceName))}</span>
     </div>
     <div class="mod-grid">${items.map(modCard).join('')}</div>
     ${data.pageCount > 1 ? `<div class="pagination">
@@ -841,11 +841,22 @@ function modCard(item) {
 }
 
 function translatedName(item) {
-  return state.library.translations?.[item.identifier] || item.name;
+  const value = state.library.translations?.[item.identifier];
+  if (typeof value === 'string' && value.trim()) return value;
+  if (value && typeof value.text === 'string' && value.text.trim()) return value.text;
+  return item.name;
 }
 
 function tagLabel(tag) {
   return state.bootstrap?.tagLabels?.[tag] || state.library.data?.facets?.tagLabels?.[tag] || state.library.data?.facets?.tags?.find((facet) => facet.tag === tag)?.label || tag;
+}
+
+function sourceNameLabel(name) {
+  const value = String(name || '').trim();
+  if (!value) return '社区模组索引';
+  if (/^CKAN\s*官方索引$/i.test(value)) return '社区模组索引';
+  if (/CKAN/i.test(value)) return value.replace(/CKAN/gi, '社区').replace(/官方索引/g, '索引').replace(/官方/g, '社区');
+  return value;
 }
 
 function installedHtml() {
@@ -1424,7 +1435,7 @@ function settingsHtml() {
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.7')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.71')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1439,7 +1450,7 @@ function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.0.7')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.0.71')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1614,7 +1625,8 @@ async function translateCatalogTitles(data) {
   const result = await api('/api/translate/batch', { method: 'POST', body: { items } });
   if (seq !== state.library.translationSeq) return;
   for (const row of result.results || []) {
-    if (row.translation && !row.error) state.library.translations[row.key] = row.translation;
+    const text = row.translation?.text || (typeof row.translation === 'string' ? row.translation : '');
+    if (text && !row.error) state.library.translations[row.key] = text;
   }
   if (state.view === 'library') renderLibraryBody();
 }

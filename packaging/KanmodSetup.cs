@@ -15,13 +15,13 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.7.0")]
-[assembly: AssemblyFileVersion("0.0.7.0")]
-[assembly: AssemblyInformationalVersion("0.0.7")]
+[assembly: AssemblyVersion("0.0.71.0")]
+[assembly: AssemblyFileVersion("0.0.71.0")]
+[assembly: AssemblyInformationalVersion("0.0.71")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.0.7";
+    internal const string AppVersion = "0.0.71";
 
     [STAThread]
     private static int Main(string[] args)
