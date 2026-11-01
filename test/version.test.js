@@ -28,6 +28,13 @@ test('checkKspCompatibility 支持规范化字段', () => {
   });
   assert.equal(raw.status, 'compatible');
 
+  // A two-part max like 1.12 covers the whole 1.12.x line.
+  const minorMax = checkKspCompatibility('1.12.5', {
+    ksp_version_min: '1.8',
+    ksp_version_max: '1.12',
+  });
+  assert.equal(minorMax.status, 'compatible');
+
   const incompatible = checkKspCompatibility('1.12.5', {
     kspVersion: '1.10.1',
   });

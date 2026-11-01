@@ -7,9 +7,9 @@
 export const BUILTIN_CATALOG_SOURCES = [
   {
     id: 'official',
-    name: 'CKAN 官方索引',
+    name: '社区模组索引',
     kind: 'archive',
-    description: 'KSP-CKAN/CKAN-meta · GitHub master 分支',
+    description: 'KSP 社区 .ckan 元数据索引 · GitHub master 分支',
     homepage: 'https://github.com/KSP-CKAN/CKAN-meta',
     urls: [
       'https://github.com/KSP-CKAN/CKAN-meta/archive/refs/heads/master.tar.gz',
@@ -22,7 +22,7 @@ export const BUILTIN_CATALOG_SOURCES = [
     id: 'ghproxy',
     name: 'GitHub 加速镜像',
     kind: 'archive',
-    description: '通过 ghproxy.net 拉取官方 CKAN 索引，适合 GitHub 访问缓慢的网络',
+    description: '通过 ghproxy.net 拉取社区索引，适合 GitHub 访问缓慢的网络',
     homepage: 'https://ghproxy.net',
     enabledByDefault: false,
     urls: [
@@ -34,7 +34,7 @@ export const BUILTIN_CATALOG_SOURCES = [
     id: 'custom',
     name: '自定义索引',
     kind: 'custom',
-    description: '填写 CKAN-meta 的 tar.gz / zip 归档或 kanmod 导出的 JSON 地址',
+    description: '填写 .ckan 索引的 tar.gz / zip 归档或 kanmod 导出的 JSON 地址',
     urls: [],
   },
 ];

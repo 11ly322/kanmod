@@ -391,6 +391,8 @@ svg { display: block; }
   letter-spacing: -.04em;
 }
 .mod-title { min-width: 0; flex: 1; }
+.mod-title .mod-original-title { display: block; margin-top: 2px; color: var(--muted-2); font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-source { width: 165px; flex: 0 0 auto; }
 .mod-title h3 { margin: 0; font-size: 13px; line-height: 1.4; font-weight: 720; letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mod-title .mod-id { display: block; margin-top: 2px; color: var(--muted-2); font-family: var(--mono); font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mod-abstract { margin: 11px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 53px; }
@@ -844,6 +846,7 @@ tr:hover td { background: #fefcfc; }
 .mod-detail-list > div:last-child { border-bottom: 0; }
 .mod-detail-list dt { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
 .mod-detail-list dd { margin: 0; text-align: right; font-size: 11.5px; color: var(--ink); overflow-wrap: anywhere; }
+.mod-detail-list .mod-tag-list { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .mod-link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .translation-card {
   margin-top: 12px;

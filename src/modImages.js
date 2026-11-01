@@ -4,6 +4,9 @@ const IMAGE_HOSTS = new Set([
   'user-images.githubusercontent.com',
   'cloud.githubusercontent.com',
   'i.imgur.com',
+  'media.forgecdn.net',
+  'edge.forgecdn.net',
+  'static.forgecdn.net',
 ]);
 
 const RASTER_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -80,7 +83,7 @@ function timeoutSignal(ms) {
 
 async function fetchText(url, fetchImpl, timeoutMs, headers = {}) {
   const response = await fetchImpl(url, {
-    headers: { 'user-agent': 'kanmod/0.0.6', ...headers },
+    headers: { 'user-agent': 'kanmod/0.0.7', ...headers },
     signal: timeoutSignal(timeoutMs),
   });
   if (!response.ok) return null;
@@ -208,7 +211,7 @@ export async function fetchImageBuffer(url, {
   }
   const response = await fetchImpl(url, {
     redirect: 'follow',
-    headers: { 'user-agent': 'kanmod/0.0.6', accept: 'image/png,image/jpeg,image/webp,image/gif' },
+    headers: { 'user-agent': 'kanmod/0.0.7', accept: 'image/png,image/jpeg,image/webp,image/gif' },
     signal: timeoutSignal(timeoutMs),
   });
   if (!response.ok) {

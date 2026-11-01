@@ -46,6 +46,10 @@ export function hasChinese(value) {
   return chinese >= 8 && chinese / text.length >= 0.12;
 }
 
+export function hasAnyChinese(value) {
+  return /[\u3400-\u9fff]/.test(String(value || ''));
+}
+
 function decodeEntities(value) {
   const entities = {
     amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
@@ -120,7 +124,7 @@ async function requestGoogle(text, { fetchImpl, timeoutMs }) {
   url.searchParams.set('dt', 't');
   url.searchParams.set('q', text);
   const response = await fetchImpl(url, {
-    headers: { 'User-Agent': 'kanmod/0.0.6', Accept: 'application/json' },
+    headers: { 'User-Agent': 'kanmod/0.0.7', Accept: 'application/json' },
     signal: timeoutSignal(timeoutMs),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -166,7 +170,7 @@ async function requestMyMemory(text, { fetchImpl, timeoutMs }) {
     url.searchParams.set('q', chunk);
     url.searchParams.set('langpair', 'en|zh-CN');
     const response = await fetchImpl(url, {
-      headers: { 'User-Agent': 'kanmod/0.0.6', Accept: 'application/json' },
+      headers: { 'User-Agent': 'kanmod/0.0.7', Accept: 'application/json' },
       signal: timeoutSignal(timeoutMs),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -202,7 +206,8 @@ export async function translateText({
 } = {}) {
   const sourceText = cleanSourceText(text);
   if (!sourceText) throw new TranslationError('EMPTY_TEXT', '没有可翻译的文本。');
-  if (hasChinese(sourceText)) {
+  const shortField = ['name', 'tag', 'query'].includes(field);
+  if ((shortField && hasAnyChinese(sourceText)) || (!shortField && hasChinese(sourceText))) {
     return {
       text: sourceText,
       provider: 'none',

@@ -2,6 +2,7 @@ const state = {
   bootstrap: null,
   view: 'overview',
   library: {
+    source: 'catalog',
     q: '',
     status: 'all',
     sort: 'relevance',
@@ -12,6 +13,9 @@ const state = {
     data: null,
     loading: false,
     error: null,
+    translations: {},
+    translationSeq: 0,
+    cf: { page: 1, data: null, loading: false, error: null },
   },
   installed: null,
   installedLoading: false,
@@ -84,6 +88,7 @@ const ICONS = {
   book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M4 19a2.5 2.5 0 0 1 2.5-2.5H20"/><path d="M8 7h8M8 11h6"/>',
   translate: '<path d="M4 5h9M8.5 3v2M6 5c.6 3.2 2.7 5.5 5.5 6.7M11.5 5C11 8.2 9 10.6 6 12"/><path d="m13 20 4-9 4 9M14.6 17h4.8"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/>',
+  key: '<circle cx="8" cy="14" r="4"/><path d="m11.2 10.8 8-8M16 5l3 3M14 7l3 3"/>',
 };
 
 function icon(name, size = 18) {
@@ -152,7 +157,7 @@ function shortId(identifier) {
 
 function kindLabel(kind) {
   return ({
-    package: '模组', plugin: '插件', parts: '部件', library: '库', tool: '工具',
+    package: '模组', mod: '模组', plugin: '插件', parts: '部件', library: '库', tool: '工具',
     configuration: '配置', metapackage: '元包',
   }[kind] || kind || '模组');
 }
@@ -178,7 +183,7 @@ function actionBadge(action) {
 
 function managedBadge(entry) {
   if (entry?.managedBy === 'kanmod') return '<span class="badge ok dot">kanmod 管理</span>';
-  if (entry?.managedBy === 'ckan') return '<span class="badge info">CKAN 管理</span>';
+  if (entry?.managedBy === 'ckan') return '<span class="badge info">外部索引管理</span>';
   return '<span class="badge">手动安装</span>';
 }
 
@@ -385,7 +390,7 @@ function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.0.6')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.0.7')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -399,6 +404,7 @@ function renderApp() {
           </div>
           <div class="topbar-actions">
             ${state.bootstrap.demo ? '<span class="demo-pill">演示模式</span>' : ''}
+            ${active ? `<button class="btn primary sm" type="button" data-action="launch-game">${icon('rocket', 15)}启动游戏</button>` : ''}
             ${active ? `<button class="btn ghost sm" type="button" data-action="refresh-scan">${icon('refresh', 15)}扫描模组</button>` : ''}
             <button class="btn icon ghost" type="button" data-action="trigger-archive" title="安装本地安装包" aria-label="安装本地安装包">${icon('upload')}</button>
             <button class="btn icon ghost" type="button" data-action="navigate" data-view="settings" title="设置" aria-label="设置">${icon('settings')}</button>
@@ -410,6 +416,7 @@ function renderApp() {
       </div>
     </div>
     <input id="archive-input" type="file" accept=".zip,.gz,.tgz,.tar.gz" hidden>
+    <input id="modpack-input" type="file" accept=".ckan,.json,application/json" hidden>
     <input id="catalog-upload-input" type="file" accept=".json,.zip,.gz,.tgz,.tar.gz" hidden>
   `;
   updateNavCounts();
@@ -520,7 +527,7 @@ function openOnboarding() {
       <div class="hero-copy">
         <p class="eyebrow">KSP 1 · MOD WORKFLOW</p>
         <h2>把模组装好，<em>然后安心发射</em>。</h2>
-        <p>kanmod 会自动找到你的 KSP 安装，索引 CKAN 模组与前置依赖，并在安装前检查版本兼容性。出现报错时，它会读日志、解释原因，只修复能够安全修复的部分。</p>
+        <p>kanmod 会自动找到你的 KSP 安装，索引社区模组与前置依赖，并在安装前检查版本兼容性。出现报错时，它会读日志、解释原因，只修复能够安全修复的部分。</p>
         <div class="hero-actions">
           <button class="btn primary" type="button" data-action="detect-instances">${icon('search', 16)}自动检测 KSP</button>
           <button class="btn ghost" type="button" data-action="add-instance">${icon('folder', 16)}手动选择目录</button>
@@ -702,44 +709,86 @@ function installedTable(entries, { compact = false, batchMode = false } = {}) {
 function libraryHtml() {
   const lib = state.library;
   const catalog = state.bootstrap.catalog || {};
+  const isCf = lib.source === 'curseforge';
+  const cf = lib.cf;
   const statuses = [
     ['all', '全部'], ['compatible', '兼容'], ['installed', '已安装'], ['updatable', '可更新'],
   ];
+  const sortOptions = isCf
+    ? [['popularity', '热门'], ['downloads', '下载量'], ['updated', '最近更新'], ['name', '名称']]
+    : [['relevance', '相关度'], ['name', '名称'], ['size', '体积'], ['version', '版本']];
   return `
     <div class="page-head">
-      <div><h2>发现模组</h2><p>检索 CKAN 索引，查看版本兼容性。安装前会先解析前置依赖并给出完整计划。</p></div>
+      <div><h2>发现模组</h2><p>${isCf ? '从 CurseForge 检索 KSP 项目，查看图片、说明和自动翻译。' : '检索社区模组索引，查看版本兼容性。安装前会先解析前置依赖并给出完整计划。'}</p></div>
       <div class="head-aside">
         <button class="btn ghost" type="button" data-action="trigger-archive">${icon('upload', 15)}本地安装包</button>
-        <button class="btn ghost" type="button" data-action="refresh-catalog" ${state.bootstrap.demo ? 'title="演示模式不联网刷新"' : ''}>${icon('refresh', 15)}刷新索引</button>
+        ${isCf ? `<button class="btn ghost" type="button" data-action="navigate" data-view="settings">${icon('settings', 15)}Forge Key</button>` : `<button class="btn ghost" type="button" data-action="refresh-catalog" ${state.bootstrap.demo ? 'title="演示模式不联网刷新"' : ''}>${icon('refresh', 15)}刷新索引</button>`}
       </div>
     </div>
-    ${!catalog.loaded ? `<div class="notice warn">${icon('alert', 18)}<div><strong>索引还没有加载。</strong> 在设置中刷新 CKAN 官方索引，或导入本地 JSON 索引。</div></div>` : ''}
+    ${!isCf && !catalog.loaded ? `<div class="notice warn">${icon('alert', 18)}<div><strong>索引还没有加载。</strong> 在设置中刷新社区模组索引，或导入本地 JSON 索引。</div></div>` : ''}
     <form class="toolbar" data-form="library-search" role="search">
+      <select id="library-source" class="select library-source" aria-label="模组来源">
+        <option value="catalog" ${!isCf ? 'selected' : ''}>社区模组索引</option>
+        <option value="curseforge" ${isCf ? 'selected' : ''}>CurseForge</option>
+      </select>
       <label class="search">
         <span class="sr-only">搜索模组</span>
         ${icon('search', 15)}
-        <input id="library-q" name="q" type="search" value="${esc(lib.q)}" placeholder="搜索模组名、标识、作者或标签…" autocomplete="off">
+        <input id="library-q" name="q" type="search" value="${esc(lib.q)}" placeholder="${isCf ? '搜索 CurseForge 项目名、作者…' : '搜索模组名、标识、作者或标签…'}" autocomplete="off">
       </label>
-      <div class="seg" role="group" aria-label="筛选">
+      ${isCf ? '' : `<div class="seg" role="group" aria-label="筛选">
         ${statuses.map(([id, label]) => `<button type="button" class="${lib.status === id ? 'active' : ''}" data-action="library-status" data-status="${id}">${label}</button>`).join('')}
       </div>
       <select id="library-tag" class="select" aria-label="按标签筛选">
         <option value="">全部标签</option>
-        ${(lib.data?.facets?.tags || []).map((facet) => `<option value="${esc(facet.tag)}" ${lib.tag === facet.tag ? 'selected' : ''}>${esc(facet.tag)} · ${fmtNumber(facet.count)}</option>`).join('')}
+        ${(lib.data?.facets?.tags || []).map((facet) => `<option value="${esc(facet.tag)}" ${lib.tag === facet.tag ? 'selected' : ''}>${esc(facet.label || tagLabel(facet.tag))} · ${fmtNumber(facet.count)}</option>`).join('')}
       </select>
       <select id="library-size" class="select" aria-label="按下载体积筛选">
         ${[['', '全部大小'], ['small', '小于 1 MB'], ['medium', '1–20 MB'], ['large', '大于 20 MB']].map(([id, label]) => `<option value="${id}" ${lib.size === id ? 'selected' : ''}>${label}</option>`).join('')}
-      </select>
+      </select>`}
       <select id="library-sort" class="select" aria-label="排序">
-        ${[['relevance', '相关度'], ['name', '名称'], ['size', '体积'], ['version', '版本']].map(([id, label]) => `<option value="${id}" ${lib.sort === id ? 'selected' : ''}>${label}</option>`).join('')}
+        ${sortOptions.map(([id, label]) => `<option value="${id}" ${lib.sort === id ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
-      <button class="btn primary" type="submit">${icon('search', 14)}搜索</button>
+      <button class="btn primary" type="submit" ${isCf && cf.loading ? 'disabled' : ''}>${icon('search', 14)}搜索</button>
     </form>
+    ${isCf && cf.data?.needsKey ? `<div class="notice warn">${icon('key', 18)}<div><strong>需要 CurseForge API Key。</strong> 在设置中填写后即可检索 Forge 项目与图片。</div></div>` : ''}
     <div id="library-body">${libraryBodyHtml()}</div>`;
+}
+
+function curseforgeBodyHtml() {
+  const lib = state.library;
+  const cf = lib.cf;
+  const data = cf.data;
+  if (cf.error) {
+    return `<div class="empty"><div class="empty-icon">${icon('alert')}</div><strong>读取 CurseForge 失败</strong><p>${esc(cf.error)}</p><button class="btn primary" type="button" data-action="retry-curseforge">重试</button></div>`;
+  }
+  if (!data) {
+    if (cf.loading) return skeletonCards(6);
+    return `<div class="empty"><div class="empty-icon">${icon('box')}</div><strong>从 CurseForge 开始检索</strong><p>输入关键词，或直接搜索查看热门 KSP 项目。</p><button class="btn primary" type="button" data-action="search-curseforge">浏览热门项目</button></div>`;
+  }
+  if (data.needsKey) {
+    return `<div class="empty"><div class="empty-icon">${icon('key')}</div><strong>还没有配置 CurseForge API Key</strong><p>${esc(data.message || '在设置中填写 API Key 后即可检索。')}</p><button class="btn primary" type="button" data-action="navigate" data-view="settings">前往设置</button></div>`;
+  }
+  const items = data.items || [];
+  if (!items.length) {
+    return `<div class="results-meta"><span>没有匹配的 CurseForge 项目</span></div>
+      <div class="empty"><div class="empty-icon">${icon('search')}</div><strong>没有结果</strong><p>换一个关键词再试。</p></div>`;
+  }
+  return `<div class="results-meta">
+      <span>共 ${fmtNumber(data.total)} 个 CurseForge 项目 · 第 ${data.page} / ${data.pageCount} 页</span>
+      <span>${cf.loading ? '<span class="spinner"></span> 更新中…' : 'CurseForge'}</span>
+    </div>
+    <div class="mod-grid">${items.map(modCard).join('')}</div>
+    ${data.pageCount > 1 ? `<div class="pagination">
+      <button class="btn ghost sm" type="button" data-action="curseforge-page" data-page="${data.page - 1}" ${data.page <= 1 ? 'disabled' : ''}>上一页</button>
+      <span>第 ${data.page} / ${data.pageCount} 页</span>
+      <button class="btn ghost sm" type="button" data-action="curseforge-page" data-page="${data.page + 1}" ${data.page >= data.pageCount ? 'disabled' : ''}>下一页</button>
+    </div>` : ''}`;
 }
 
 function libraryBodyHtml() {
   const lib = state.library;
+  if (lib.source === 'curseforge') return curseforgeBodyHtml();
   if (lib.error) {
     return `<div class="empty"><div class="empty-icon">${icon('alert')}</div><strong>读取模组库失败</strong><p>${esc(lib.error)}</p><button class="btn primary" type="button" data-action="retry-library">重试</button></div>`;
   }
@@ -755,7 +804,7 @@ function libraryBodyHtml() {
   }
   return `<div class="results-meta">
       <span>共 ${fmtNumber(data.total)} 个模组 · 第 ${data.page} / ${data.pageCount} 页</span>
-      <span>${lib.loading ? '<span class="spinner"></span> 更新中…' : esc(state.bootstrap.catalog?.sourceName || 'CKAN 索引')}</span>
+      <span>${lib.loading ? '<span class="spinner"></span> 更新中…' : esc(state.bootstrap.catalog?.sourceName || '社区模组索引')}</span>
     </div>
     <div class="mod-grid">${items.map(modCard).join('')}</div>
     ${data.pageCount > 1 ? `<div class="pagination">
@@ -766,25 +815,37 @@ function libraryBodyHtml() {
 }
 
 function modCard(item) {
+  const isCf = item.source === 'curseforge';
   const installed = item.installed
     ? `<span class="installed-flag"><span class="badge ok dot">已安装${item.installedVersion ? ` ${esc(item.installedVersion)}` : ''}</span></span>`
     : '';
+  const title = translatedName(item);
   return `<article class="mod-card">
     ${installed}
     <div class="mod-card-top">
       <span class="mod-avatar" aria-hidden="true">${initial(item.name)}</span>
-      <div class="mod-title"><h3 title="${esc(item.name)}">${esc(item.name)}</h3><span class="mod-id">${esc(item.identifier)}</span></div>
+      <div class="mod-title"><h3 title="${esc(item.name)}">${esc(title)}</h3>${title !== item.name ? `<span class="mod-original-title">${esc(item.name)}</span>` : ''}<span class="mod-id">${esc(item.identifier)}</span></div>
     </div>
     <p class="mod-abstract">${esc(item.abstract || '这个模组还没有简介。')}</p>
-    <div class="mod-meta">${compatibilityBadge(item.compatibility)}<span class="tag">${esc(kindLabel(item.kind))}</span>${item.downloadSize ? `<span class="tag">${esc(fmtBytes(item.downloadSize))}</span>` : ''}</div>
+    <div class="mod-meta">${compatibilityBadge(item.compatibility)}<span class="tag">${esc(kindLabel(item.kind))}</span>${(item.tags || []).slice(0, 2).map((tag) => `<span class="tag">${esc(tagLabel(tag))}</span>`).join('')}${item.downloadSize ? `<span class="tag">${esc(fmtBytes(item.downloadSize))}</span>` : ''}</div>
     <div class="mod-foot">
       <span class="version">v${esc(item.version)}</span>
       <div class="mod-actions">
         <button class="btn ghost sm" type="button" data-action="open-mod-page" data-id="${esc(item.identifier)}" data-version="${esc(item.version)}">${icon('book', 13)}简介</button>
-        <button class="btn ${item.installed ? 'soft' : 'primary'} sm" type="button" data-action="plan-install" data-id="${esc(item.identifier)}" data-version="${esc(item.version)}">${item.installed ? '管理' : '安装'}</button>
+        ${isCf
+          ? `<a class="btn ghost sm" href="${esc(item.curseforge?.url || 'https://www.curseforge.com/kerbal-space-program')}" target="_blank" rel="noreferrer">${icon('link', 13)}CurseForge</a>`
+          : `<button class="btn ${item.installed ? 'soft' : 'primary'} sm" type="button" data-action="plan-install" data-id="${esc(item.identifier)}" data-version="${esc(item.version)}">${item.installed ? '管理' : '安装'}</button>`}
       </div>
     </div>
   </article>`;
+}
+
+function translatedName(item) {
+  return state.library.translations?.[item.identifier] || item.name;
+}
+
+function tagLabel(tag) {
+  return state.bootstrap?.tagLabels?.[tag] || state.library.data?.facets?.tagLabels?.[tag] || state.library.data?.facets?.tags?.find((facet) => facet.tag === tag)?.label || tag;
 }
 
 function installedHtml() {
@@ -810,6 +871,8 @@ function installedHtml() {
       <div class="head-aside">
         ${updates.length ? `<button class="btn primary" type="button" data-action="open-updates">${icon('refresh', 15)}快捷更新 ${updates.length}</button>` : ''}
         <button class="btn ${state.batchMode ? 'soft' : 'ghost'}" type="button" data-action="toggle-batch">${icon('check', 15)}${state.batchMode ? '退出批量' : '批量管理'}</button>
+        <button class="btn ghost" type="button" data-action="import-modpack">${icon('upload', 15)}导入模组包</button>
+        <button class="btn ghost" type="button" data-action="export-modpack">${icon('download', 15)}导出模组包</button>
         <button class="btn ghost" type="button" data-action="open-folder" data-target="gamedata">${icon('folder', 15)}GameData</button>
         <button class="btn ghost" type="button" data-action="refresh-scan">${icon('refresh', 15)}重新扫描</button>
       </div>
@@ -835,8 +898,8 @@ function installedHtml() {
 }
 
 function modPageHtml() {
-  if (!state.bootstrap?.instance) return openOnboarding();
   const mod = state.mod;
+  if (!state.bootstrap?.instance && mod?.data?.source !== 'curseforge') return openOnboarding();
   if (!mod) return `<div class="empty"><div class="empty-icon">${icon('book')}</div><strong>还没有选择模组</strong><p>从模组库打开一个模组简介。</p><button class="btn primary" type="button" data-action="navigate" data-view="library">打开模组库</button></div>`;
   if (mod.loading) {
     return `<button class="btn ghost sm" type="button" data-action="mod-back">${icon('chevron', 14)}返回模组库</button>
@@ -848,12 +911,14 @@ function modPageHtml() {
   }
   const data = mod.data;
   const pkg = data.package;
+  const isCf = data.source === 'curseforge';
   const relations = data.relationships || {};
   const versions = data.versions || [];
   const installed = data.installed;
   const compatibility = data.compatibility;
   const abstract = pkg.abstract || '这个模组还没有简介。';
   const description = String(pkg.description || '').trim();
+  const displayName = mod.translations?.name?.text || pkg.name;
   return `
     <div class="mod-page-head">
       <div>
@@ -862,14 +927,17 @@ function modPageHtml() {
           <span class="mod-avatar xl" aria-hidden="true">${initial(pkg.name)}</span>
           <div>
             <p class="eyebrow">模组简介 · ${esc(kindLabel(pkg.kind))}</p>
-            <h2>${esc(pkg.name)}</h2>
+            <h2>${esc(displayName)}</h2>
+            ${displayName !== pkg.name ? `<p class="mod-original-name">${esc(pkg.name)}</p>` : ''}
             <div class="mod-page-sub"><span class="mono">${esc(pkg.identifier)}</span><span>v${esc(pkg.version)}</span>${installed ? `<span class="badge ok dot">已安装 ${esc(installed)}</span>` : ''}</div>
           </div>
         </div>
         <div class="mod-page-badges">${compatibilityBadge(compatibility)}${pkg.releaseStatus && pkg.releaseStatus !== 'stable' ? `<span class="badge warn">${esc(pkg.releaseStatus)}</span>` : ''}<span class="badge">${esc(kindLabel(pkg.kind))}</span></div>
       </div>
       <div class="head-aside">
-        <button class="btn primary" type="button" data-action="plan-install" data-id="${esc(pkg.identifier)}" data-version="${esc(pkg.version)}">${icon('download', 15)}${installed ? '查看安装计划' : '安装模组'}</button>
+        ${isCf
+          ? `<a class="btn primary" href="${esc(pkg.resources?.homepage || pkg.curseforge?.url || 'https://www.curseforge.com/kerbal-space-program')}" target="_blank" rel="noreferrer">${icon('link', 15)}在 CurseForge 打开</a>`
+          : `<button class="btn primary" type="button" data-action="plan-install" data-id="${esc(pkg.identifier)}" data-version="${esc(pkg.version)}">${icon('download', 15)}${installed ? '查看安装计划' : '安装模组'}</button>`}
       </div>
     </div>
     ${compatibility?.status === 'incompatible' || compatibility?.status === 'warning' ? `<div class="notice ${compatibility.status === 'incompatible' ? 'red' : 'warn'}" style="margin-top:14px">${icon('alert', 18)}<div><strong>${esc(compatibility.label || '版本兼容性提示')}</strong> ${esc(compatibility.reason || '')}</div></div>` : ''}
@@ -898,6 +966,7 @@ function modPageHtml() {
             <div><dt>下载体积</dt><dd>${esc(fmtBytes(pkg.downloadSize))}</dd></div>
             <div><dt>许可证</dt><dd>${esc(pkg.license || '未注明')}</dd></div>
             <div><dt>标识</dt><dd class="mono">${esc(pkg.identifier)}</dd></div>
+            ${(pkg.tags || []).length ? `<div><dt>标签</dt><dd class="mod-tag-list">${pkg.tags.map((tag) => `<span class="tag">${esc(tagLabel(tag))}</span>`).join('')}</dd></div>` : ''}
           </dl>
           <div class="mod-link-row">
             ${pkg.resources?.homepage ? `<a class="btn ghost sm" href="${esc(pkg.resources.homepage)}" target="_blank" rel="noreferrer">${icon('link', 13)}主页</a>` : ''}
@@ -908,7 +977,9 @@ function modPageHtml() {
         <section class="card mod-side-card">
           <div class="card-head"><h3>可用版本</h3><span class="text-muted">${fmtNumber(versions.length)} 个</span></div>
           <div class="version-list mod-version-list">
-            ${versions.map((entry) => `<button class="version-chip ${entry.version === pkg.version ? 'active' : ''}" type="button" data-action="mod-version" data-id="${esc(pkg.identifier)}" data-version="${esc(entry.version)}" title="${esc(entry.compatibility?.reason || '')}">${esc(entry.version)}</button>`).join('') || '<span class="text-muted">索引中没有其它版本。</span>'}
+            ${versions.map((entry) => isCf
+              ? `<span class="version-chip ${entry.version === pkg.version ? 'active' : ''}" title="${esc(entry.compatibility?.reason || '')}">${esc(entry.version)}</span>`
+              : `<button class="version-chip ${entry.version === pkg.version ? 'active' : ''}" type="button" data-action="mod-version" data-id="${esc(pkg.identifier)}" data-version="${esc(entry.version)}" title="${esc(entry.compatibility?.reason || '')}">${esc(entry.version)}</button>`).join('') || '<span class="text-muted">索引中没有其它版本。</span>'}
           </div>
         </section>
       </aside>
@@ -1286,11 +1357,12 @@ function settingsHtml() {
           ${switchRow('allowWarning', '允许兼容性警告', 'KSP 版本不精确匹配、但可能正常工作时仍允许安装。', Boolean(install.allowWarning))}
           ${switchRow('allowUnknown', '允许未知版本', '模组未声明 KSP 版本时允许安装。', Boolean(install.allowUnknown))}
           ${switchRow('keepDownloads', '保留下载缓存', '安装完成后保留下载的压缩包，便于重装或离线使用。', install.keepDownloads !== false)}
+          ${switchRow('autoDependencies', '自动解析并下载前置依赖', '安装或更新时自动把缺少的前置依赖加入计划并一起下载。关闭后只安装所选模组，缺少前置时会被阻止。', install.autoDependencies !== false)}
         </section>
 
         <section class="card form-section" style="grid-column:1/-1">
           <h3>${icon('network', 15)}索引源</h3>
-          <p class="section-desc">安装模组时会按直链、镜像前缀、GitHub Releases、SpaceDock 的顺序回退。索引只用于读取 CKAN 元数据。</p>
+          <p class="section-desc">安装模组时会按直链、镜像前缀、GitHub Releases、SpaceDock 的顺序回退。索引只用于读取 .ckan 元数据。</p>
           ${builtinSources.map((source) => `
             <label class="source-row">
               <span class="switch"><input type="checkbox" data-enabled-source value="${esc(source.id)}" ${enabled.has(source.id) ? 'checked' : ''} aria-label="启用 ${esc(source.name)}"><span></span></span>
@@ -1302,10 +1374,16 @@ function settingsHtml() {
           </div>
           <div class="field-row" style="margin-top:8px">
             <div class="field"><label for="new-source-name">名称</label><input id="new-source-name" type="text" placeholder="例如：本地镜像"></div>
-            <div class="field" style="flex:2"><label for="new-source-url">地址</label><input id="new-source-url" type="url" placeholder="https://example.com/CKAN-meta.tar.gz"></div>
+            <div class="field" style="flex:2"><label for="new-source-url">地址</label><input id="new-source-url" type="url" placeholder="https://example.com/catalog.tar.gz"></div>
             <button class="btn ghost" type="button" data-action="append-source">${icon('plus', 14)}添加</button>
           </div>
           <div class="divider"></div>
+          <div class="section-title" style="margin:14px 0 6px">CurseForge 源 <span class="sub">可选 · API Key</span></div>
+          <div class="field">
+            <label for="curseforgeApiKey">CurseForge API Key</label>
+            <input id="curseforgeApiKey" name="curseforgeApiKey" type="password" autocomplete="off" placeholder="${s.hasCurseforgeKey ? '已配置，留空保持不变' : '填写 CurseForge API Key 后启用'}">
+            <span class="hint">在 CurseForge 控制台申请。Key 只保存在本机设置中，用于检索项目、图片与说明。</span>
+          </div>
           ${switchRow('autoRefresh', '自动刷新索引', '启动时如果缓存超过 24 小时，尝试在后台刷新。', catalog.autoRefresh !== false)}
           <div class="field-row" style="margin-top:8px">
             <div class="field" style="flex:2"><label for="catalog-url">从 URL 导入索引</label><input id="catalog-url" type="url" placeholder="https://example.com/catalog.json" ${canNetwork ? '' : 'disabled'}></div>
@@ -1318,7 +1396,7 @@ function settingsHtml() {
             <span>${catalogStatus.loadedAt ? `更新于 ${fmtDate(catalogStatus.loadedAt)}` : ''} ${catalogStatus.stale ? '<span class="badge warn">已过期</span>' : ''}</span>
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
-            <button class="btn primary sm" type="button" data-action="refresh-catalog" ${canNetwork ? '' : 'disabled'}>${icon('refresh', 14)}刷新 CKAN 索引</button>
+            <button class="btn primary sm" type="button" data-action="refresh-catalog" ${canNetwork ? '' : 'disabled'}>${icon('refresh', 14)}刷新索引</button>
             <button class="btn ghost sm" type="button" data-action="export-catalog">${icon('download', 14)}导出当前索引</button>
           </div>
         </section>
@@ -1340,14 +1418,19 @@ function settingsHtml() {
           <h3>${icon('settings', 15)}界面与数据</h3>
           <p class="section-desc">界面只保存轻量偏好，不包含账号信息。</p>
           <div class="field"><label for="pageSize">模组库每页数量</label><input id="pageSize" name="pageSize" type="number" min="6" max="96" value="${esc(ui.pageSize || 24)}"></div>
-          ${switchRow('autoTranslate', '自动翻译模组简介', '打开模组简介时自动检索并翻译英文简介。机器翻译仅供参考，原文始终保留。', ui.autoTranslate !== false)}
+          ${switchRow('autoTranslate', '自动翻译标题、标签和简介', '打开模组简介时自动翻译标题和英文简介，标签使用内置中文词典。机器翻译仅供参考，原文始终保留。', ui.autoTranslate !== false)}
           <div class="divider"></div>
           <div class="field">
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.6')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.7')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
+            <button class="btn ghost sm" type="button" data-action="clear-cache">${icon('trash', 14)}清理缓存</button>
+          </div>
+          <div id="cache-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-top:8px">缓存包含下载包、图片和翻译结果，可随时清理。</div>
           <div class="field"><label>数据目录</label><input type="text" value="${esc(s.dataDir || '')}" readonly></div>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="open-folder" data-target="data">${icon('folder', 14)}打开数据目录</button>
@@ -1356,7 +1439,7 @@ function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.0.6')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.0.7')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1384,6 +1467,37 @@ async function checkAppUpdate(button) {
     toast(error.message, 'error');
   } finally {
     if (button) button.disabled = false;
+  }
+}
+
+async function showCacheStatus() {
+  const status = document.getElementById('cache-status');
+  try {
+    const data = await api('/api/cache/status');
+    const cache = data.cache || {};
+    if (status) {
+      status.innerHTML = `合计 ${esc(cache.totalLabel || '0 B')} · 下载 ${esc(cache.targets?.downloads?.label || '0 B')} · 图片 ${esc(cache.targets?.images?.label || '0 B')} · 翻译 ${esc(cache.targets?.translations?.label || '0 B')}`;
+    }
+  } catch (error) {
+    if (status) status.textContent = error.message;
+  }
+}
+
+async function clearCache() {
+  const ok = await confirmAction({
+    title: '清理本地缓存',
+    message: '会删除已下载的安装包、图片缓存和翻译缓存。不会影响已安装模组、安装记录或回收站。',
+    confirmText: '清理缓存',
+    danger: false,
+  });
+  if (!ok) return;
+  try {
+    const data = await api('/api/cache/clear', { method: 'POST', body: { targets: ['downloads', 'images', 'translations'] } });
+    const status = document.getElementById('cache-status');
+    if (status) status.innerHTML = `已清理 ${esc(fmtBytes(data.cleared || 0))}，当前 ${esc(data.cache?.totalLabel || '0 B')}。`;
+    toast('缓存已清理');
+  } catch (error) {
+    toast(error.message, 'error');
   }
 }
 
@@ -1427,12 +1541,52 @@ async function loadCatalog() {
     state.library.pageSize = data.pageSize || state.library.pageSize;
     state.library.error = null;
     updateLibraryFacets(data);
+    translateCatalogTitles(data).catch(() => {});
   } catch (error) {
     state.library.error = error.message;
   } finally {
     state.library.loading = false;
     if (state.view === 'library') renderLibraryBody();
   }
+}
+
+async function loadCurseForge() {
+  const cf = state.library.cf;
+  if (cf.loading) return;
+  cf.loading = true;
+  cf.error = null;
+  if (state.view === 'library') renderLibraryBody();
+  const params = new URLSearchParams({
+    q: state.library.q,
+    page: String(cf.page),
+    pageSize: String(state.library.pageSize),
+    sort: state.library.sort,
+  });
+  try {
+    const data = await api(`/api/curseforge/search?${params.toString()}`);
+    cf.data = data;
+    cf.page = data.page || cf.page;
+    cf.error = null;
+    if (!data.needsKey) translateCatalogTitles(data).catch(() => {});
+  } catch (error) {
+    cf.error = error.message;
+  } finally {
+    cf.loading = false;
+    if (state.view === 'library') renderLibraryBody();
+  }
+}
+
+async function switchLibrarySource(source) {
+  const next = source === 'curseforge' ? 'curseforge' : 'catalog';
+  if (state.library.source === next) return;
+  state.library.source = next;
+  state.library.q = '';
+  state.library.page = 1;
+  state.library.cf.page = 1;
+  state.library.sort = next === 'curseforge' ? 'popularity' : 'relevance';
+  renderApp();
+  if (next === 'curseforge') await loadCurseForge();
+  else await loadCatalog();
 }
 
 function renderLibraryBody() {
@@ -1444,8 +1598,25 @@ function updateLibraryFacets(data) {
   const select = document.getElementById('library-tag');
   if (!select || !data?.facets?.tags) return;
   const current = state.library.tag;
-  select.innerHTML = `<option value="">全部标签</option>${data.facets.tags.map((facet) => `<option value="${esc(facet.tag)}">${esc(facet.tag)} · ${fmtNumber(facet.count)}</option>`).join('')}`;
+  select.innerHTML = `<option value="">全部标签</option>${data.facets.tags.map((facet) => `<option value="${esc(facet.tag)}">${esc(facet.label || tagLabel(facet.tag))} · ${fmtNumber(facet.count)}</option>`).join('')}`;
   select.value = current;
+}
+
+async function translateCatalogTitles(data) {
+  if (!data?.items?.length || state.bootstrap?.demo) return;
+  if (state.bootstrap?.settings?.ui?.autoTranslate === false) return;
+  const items = data.items
+    .filter((item) => item.identifier && item.name && !hasCjk(item.name) && !state.library.translations[item.identifier])
+    .slice(0, 24)
+    .map((item) => ({ key: item.identifier, identifier: item.identifier, version: item.version, field: 'name', text: item.name }));
+  if (!items.length) return;
+  const seq = ++state.library.translationSeq;
+  const result = await api('/api/translate/batch', { method: 'POST', body: { items } });
+  if (seq !== state.library.translationSeq) return;
+  for (const row of result.results || []) {
+    if (row.translation && !row.error) state.library.translations[row.key] = row.translation;
+  }
+  if (state.view === 'library') renderLibraryBody();
 }
 
 async function loadJobs() {
@@ -1526,6 +1697,41 @@ async function refreshScan() {
     toast(error.message, 'error');
   } finally {
     setBusy(button, false);
+  }
+}
+
+async function launchGame(button) {
+  setBusy(button, true, '正在启动…');
+  try {
+    const data = await api('/api/game/launch', { method: 'POST' });
+    toast(`KSP 已启动${data.pid ? ` · PID ${data.pid}` : ''}`, 'success');
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+function exportModpack() {
+  window.location.assign('/api/modpack/export');
+}
+
+function importModpack() {
+  document.getElementById('modpack-input')?.click();
+}
+
+async function importModpackFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const preview = await api('/api/modpack/preview', { method: 'POST', body: data });
+    const depends = Array.isArray(data.depends) ? data.depends : data.package?.depends || [];
+    const roots = depends.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean);
+    state.pendingPlan = { identifier: preview.modpack?.identifier, roots, plan: preview.plan, name: preview.modpack?.name };
+    setModalContent(planModalHtml(preview.plan, preview.modpack?.name || file.name), { small: false });
+  } catch (error) {
+    toast(error.message, 'error');
   }
 }
 
@@ -1923,6 +2129,26 @@ async function loadModPage(identifier, version = null) {
   token.error = null;
   renderApp();
   try {
+    const isCf = /^curseforge-\d+$/.test(identifier);
+    if (isCf) {
+      const data = await api(`/api/curseforge/mod/${identifier.slice('curseforge-'.length)}`);
+      if (state.mod !== token) return;
+      token.data = data;
+      token.version = data.package.version;
+      token.images = Array.isArray(data.images) ? data.images : [];
+      token.loading = false;
+      renderApp();
+      const settings = state.bootstrap?.settings?.ui || {};
+      if (settings.autoTranslate !== false) {
+        for (const field of ['name', 'abstract', 'description']) {
+          const source = field === 'name' ? data.package.name : data.package[field];
+          if (source && !hasCjk(source) && !token.translations[field] && !token.translationErrors[field]) {
+            translateMod(field, false, { silent: true }).catch(() => {});
+          }
+        }
+      }
+      return;
+    }
     const params = new URLSearchParams({ identifier });
     if (version) params.set('version', version);
     const data = await api(`/api/catalog/package?${params.toString()}`);
@@ -1936,6 +2162,12 @@ async function loadModPage(identifier, version = null) {
     const abstract = data.package.abstract || '';
     if (settings.autoTranslate !== false && abstract && !hasCjk(abstract) && !token.translations.abstract && !token.translationErrors.abstract) {
       await translateMod('abstract', false, { silent: true });
+    }
+    if (settings.autoTranslate !== false && data.package.name && !hasCjk(data.package.name) && !token.translations.name && !token.translationErrors.name) {
+      translateMod('name', false, { silent: true }).catch(() => {});
+    }
+    if (settings.autoTranslate !== false && data.package.description && !hasCjk(data.package.description) && !token.translations.description && !token.translationErrors.description) {
+      translateMod('description', false, { silent: true }).catch(() => {});
     }
   } catch (error) {
     if (state.mod !== token) return;
@@ -2204,7 +2436,7 @@ async function confirmInstall() {
   const settings = state.bootstrap.settings?.install || {};
   try {
     const body = {
-      roots: [pending.version ? { identifier: pending.identifier, version: pending.version } : pending.identifier],
+      roots: pending.roots || [pending.version ? { identifier: pending.identifier, version: pending.version } : pending.identifier],
       allowWarning: Boolean(settings.allowWarning),
       allowUnknown: Boolean(settings.allowUnknown),
       includeRecommended: false,
@@ -2428,6 +2660,7 @@ async function saveSettings(form) {
       allowWarning: checked('allowWarning'),
       allowUnknown: checked('allowUnknown'),
       keepDownloads: checked('keepDownloads'),
+      autoDependencies: checked('autoDependencies'),
     },
     network: {
       timeoutSeconds: Number(value('timeoutSeconds')) || 45,
@@ -2443,6 +2676,8 @@ async function saveSettings(form) {
     },
     ui: { pageSize: Math.min(96, Math.max(6, Number(value('pageSize')) || 24)), autoTranslate: checked('autoTranslate') },
   };
+  const curseforgeApiKey = String(value('curseforgeApiKey') || '').trim();
+  if (curseforgeApiKey) body.curseforgeApiKey = curseforgeApiKey;
   setBusy(button, true, '保存中…');
   try {
     const data = await api('/api/settings', { method: 'POST', body });
@@ -2652,6 +2887,9 @@ function setupEvents() {
         case 'refresh-scan':
           await refreshScan();
           break;
+        case 'launch-game':
+          await launchGame(actionNode);
+          break;
         case 'refresh-catalog':
           await refreshCatalog();
           break;
@@ -2686,7 +2924,8 @@ function setupEvents() {
           await translateMod(actionNode.dataset.field || 'abstract', actionNode.dataset.force === '1');
           break;
         case 'refresh-images':
-          await loadModImages(true);
+          if (state.mod?.data?.source === 'curseforge') await loadModPage(state.mod.identifier, state.mod.version);
+          else await loadModImages(true);
           break;
         case 'open-image':
           openLightbox(Number(actionNode.dataset.index) || 0);
@@ -2725,7 +2964,19 @@ function setupEvents() {
           await loadRelationships(state.relationshipQuery, state.relationshipVersion);
           break;
         case 'retry-library':
-          await loadCatalog();
+          if (state.library.source === 'curseforge') await loadCurseForge();
+          else await loadCatalog();
+          break;
+        case 'retry-curseforge':
+          await loadCurseForge();
+          break;
+        case 'search-curseforge':
+          state.library.cf.page = 1;
+          await loadCurseForge();
+          break;
+        case 'curseforge-page':
+          state.library.cf.page = Math.max(1, Number(actionNode.dataset.page));
+          await loadCurseForge();
           break;
         case 'retry-diagnostics':
           await loadDiagnostics({ force: true });
@@ -2790,8 +3041,20 @@ function setupEvents() {
         case 'check-update':
           await checkAppUpdate(actionNode);
           break;
+        case 'cache-status':
+          await showCacheStatus();
+          break;
+        case 'clear-cache':
+          await clearCache();
+          break;
         case 'trigger-archive':
           triggerArchive();
+          break;
+        case 'import-modpack':
+          importModpack();
+          break;
+        case 'export-modpack':
+          exportModpack();
           break;
         case 'confirm-upload':
           await confirmUploadInstall();
@@ -2843,7 +3106,9 @@ function setupEvents() {
         const input = form.querySelector('#library-q');
         state.library.q = input?.value.trim() || '';
         state.library.page = 1;
-        await loadCatalog();
+        state.library.cf.page = 1;
+        if (state.library.source === 'curseforge') await loadCurseForge();
+        else await loadCatalog();
       } else if (kind === 'relation-search') {
         const input = form.querySelector('#relation-q');
         const identifier = input?.value.trim();
@@ -2883,7 +3148,12 @@ function setupEvents() {
       state.library.q = event.target.value;
       state.library.page = 1;
       clearTimeout(state.searchTimer);
-      state.searchTimer = setTimeout(() => loadCatalog(), 260);
+      state.searchTimer = setTimeout(() => {
+        state.library.page = 1;
+        state.library.cf.page = 1;
+        if (state.library.source === 'curseforge') loadCurseForge();
+        else loadCatalog();
+      }, 260);
     }
   });
 
@@ -2893,11 +3163,15 @@ function setupEvents() {
       syncBatchSelection();
     } else if (event.target.classList?.contains('row-select')) {
       syncBatchSelection();
+    } else if (event.target.id === 'library-source') {
+      await switchLibrarySource(event.target.value);
     } else if (event.target.id === 'library-sort') {
       state.library.sort = event.target.value;
       state.library.page = 1;
+      state.library.cf.page = 1;
       renderApp();
-      await loadCatalog();
+      if (state.library.source === 'curseforge') await loadCurseForge();
+      else await loadCatalog();
     } else if (event.target.id === 'library-tag') {
       state.library.tag = event.target.value;
       state.library.page = 1;
@@ -2911,6 +3185,10 @@ function setupEvents() {
     } else if (event.target.id === 'archive-input') {
       const file = event.target.files?.[0];
       if (file) await previewArchive(file);
+    } else if (event.target.id === 'modpack-input') {
+      const file = event.target.files?.[0];
+      if (file) await importModpackFile(file);
+      event.target.value = '';
     } else if (event.target.id === 'catalog-upload-input') {
       const file = event.target.files?.[0];
       if (file) await uploadCatalogFile(file);

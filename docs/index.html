@@ -18,7 +18,7 @@
   <meta property="og:image" content="https://11ly322.github.io/kanmod/assets/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="kanmod 0.0.6 — 让每一次发射，少一次崩溃。">
+  <meta property="og:image:alt" content="kanmod 0.0.7 — 让每一次发射，少一次崩溃。">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://11ly322.github.io/kanmod/assets/og.png">
   <script type="application/ld+json">
@@ -29,9 +29,9 @@
     "operatingSystem": "Windows 10, Windows 11",
     "applicationCategory": "GameApplication",
     "description": "坎巴拉太空计划 1 的本地模组管理器，支持依赖解析、问题诊断、多源下载和中文翻译。",
-    "softwareVersion": "0.0.6",
+    "softwareVersion": "0.0.7",
     "url": "https://11ly322.github.io/kanmod/",
-    "downloadUrl": "https://github.com/11ly322/kanmod/releases/download/v0.0.6/kanmod-setup-0.0.6.exe",
+    "downloadUrl": "https://github.com/11ly322/kanmod/releases/download/v0.0.7/kanmod-setup-0.0.7.exe",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" }
   }
   </script>
@@ -65,7 +65,7 @@
         </a>
       </nav>
 
-      <a class="btn btn-primary btn-sm nav-download" href="#download">下载 0.0.6</a>
+      <a class="btn btn-primary btn-sm nav-download" href="#download">下载 0.0.7</a>
     </div>
   </header>
 
@@ -76,7 +76,7 @@
         <div class="hero-copy">
           <div class="eyebrow">
             <span class="status-dot" aria-hidden="true"></span>
-            0.0.6 已发布 · Windows 10 / 11
+            0.0.7 已发布 · Windows 10 / 11
           </div>
           <h1>让每一次发射，<br><em>少一次崩溃。</em></h1>
           <p class="hero-lead">
@@ -84,7 +84,7 @@
             再读取 <code>KSP.log</code> 把崩溃翻译成人话。点下安装，剩下的交给它。
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary btn-lg" href="https://github.com/11ly322/kanmod/releases/download/v0.0.6/kanmod-setup-0.0.6.exe">
+            <a class="btn btn-primary btn-lg" href="https://github.com/11ly322/kanmod/releases/download/v0.0.7/kanmod-setup-0.0.7.exe">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4.5-4.5M12 14l-4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               下载 Windows 安装版
             </a>
@@ -140,7 +140,7 @@
         <div class="section-head">
           <span class="kicker">WHY KANMOD</span>
           <h2>装模组不该是一场考古。</h2>
-          <p>把 CKAN 元数据、版本约束和游戏日志放在一起看，很多“玄学崩溃”其实都有明确答案。</p>
+          <p>把 .ckan 元数据、版本约束和游戏日志放在一起看，很多“玄学崩溃”其实都有明确答案。</p>
         </div>
 
         <div class="feature-grid">
@@ -167,7 +167,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
             <h3>多下载源回退</h3>
-            <p>CKAN 直链、镜像前缀、GitHub Releases、SpaceDock 依次尝试，失败记录保留，支持 SHA256 校验。</p>
+            <p>索引直链、镜像前缀、GitHub Releases、SpaceDock 依次尝试，失败记录保留，支持 SHA256 校验。</p>
             <span class="feature-note">MULTI-SOURCE</span>
           </article>
 
@@ -184,9 +184,36 @@
             <span class="feature-icon">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h10M4 10h7M4 15h10M4 20h7M17 4v16m0-12 3 3m-3-3-3 3m3 9 3-3m-3 3-3-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
-            <h3>自动翻译简介</h3>
-            <p>打开英文模组页时自动翻译简介，完整说明按需翻译；结果缓存到本地，离线演示也有内置中文。</p>
+            <h3>标题、标签与简介翻译</h3>
+            <p>自动翻译英文模组标题与简介，标签使用本地词典；完整说明按需翻译。结果缓存到本地，离线演示也有内置中文。</p>
             <span class="feature-note">ZH-CN TRANSLATION</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M4 12h16M12 4c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S9.6 6.2 12 4Z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+            </span>
+            <h3>CurseForge 浏览</h3>
+            <p>配置 API Key 后检索 KSP 项目，查看封面、截图与说明；标题和说明自动翻译，详情页可直接跳转项目页。</p>
+            <span class="feature-note">CURSEFORGE</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 21h12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </span>
+            <h3>从软件内启动游戏</h3>
+            <p>检测到 KSP 实例后，从顶栏直接启动游戏，不用再翻目录找可执行文件。</p>
+            <span class="feature-note">LAUNCH KSP</span>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM8 10h8M8 14h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m15 12 2 2 3-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3>模组包与缓存</h3>
+            <p>导出已安装清单为 .ckan 模组包，导入后生成安装计划；下载、图片、翻译缓存可查看并一键清理。</p>
+            <span class="feature-note">MODPACK / CACHE</span>
           </article>
 
           <article class="feature-card reveal">
@@ -295,7 +322,7 @@
           <span class="kicker">ONE CLICK, IN ORDER</span>
           <h2>点一下安装，<br>前置自己排队。</h2>
           <p>
-            kanmod 读取 CKAN 的 <code>depends</code> 字段，沿着依赖图递归找到所有必需模组，
+            kanmod 读取 .ckan 的 <code>depends</code> 字段，沿着依赖图递归找到所有必需模组，
             再根据你的 KSP 版本挑选兼容版本。你看到的是安装计划，不是一堆需要手动搜索的名字。
           </p>
           <div class="mini-stats">
@@ -353,21 +380,21 @@
             <h2>把下一次崩溃，<br>留在这次之前。</h2>
             <p>安装包自带运行环境，不需要 Node.js，也不需要打开命令行。程序、运行环境和数据都保存在安装目录，默认优先选择非 C 盘。</p>
             <div class="download-actions">
-              <a class="btn btn-white btn-lg" href="https://github.com/11ly322/kanmod/releases/download/v0.0.6/kanmod-setup-0.0.6.exe">
+              <a class="btn btn-white btn-lg" href="https://github.com/11ly322/kanmod/releases/download/v0.0.7/kanmod-setup-0.0.7.exe">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4.5-4.5M12 14l-4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                下载 kanmod 0.0.6
+                下载 kanmod 0.0.7
               </a>
               <a class="btn btn-outline-light btn-lg" href="https://github.com/11ly322/kanmod/releases" target="_blank" rel="noopener">所有版本</a>
             </div>
             <div class="download-meta">
-              <span>Windows 10 / 11</span><span>33 MB</span><span>v0.0.6</span><span>MIT License</span>
+              <span>Windows 10 / 11</span><span>33 MB</span><span>v0.0.7</span><span>MIT License</span>
             </div>
           </div>
 
           <div class="install-steps">
             <div class="step">
               <span class="step-num">01</span>
-              <div><strong>运行安装器</strong><p>下载 <code>kanmod-setup-0.0.6.exe</code>，默认安装到非 C 盘的 <code>Programs\kanmod</code>，也可自选目录。</p></div>
+              <div><strong>运行安装器</strong><p>下载 <code>kanmod-setup-0.0.7.exe</code>，默认安装到非 C 盘的 <code>Programs\kanmod</code>，也可自选目录。</p></div>
             </div>
             <div class="step">
               <span class="step-num">02</span>
@@ -391,11 +418,11 @@
         <div class="download-foot">
           <div>
             <strong>安装包 SHA256</strong>
-            <code>4b24ab505ef4f6f9d8acee1402eef4354c49949c843c6d15422e71e1bcf722d6</code>
+            <code>1f8f4ce64955707f820a243b8d72c03db66770d0ef50dd9b5d336250b41e94b7</code>
           </div>
           <div class="download-note">
             <span>未做代码签名，SmartScreen 可能提示“未知发布者”。</span>
-            <a href="https://github.com/11ly322/kanmod/releases/tag/v0.0.6" target="_blank" rel="noopener">查看发布说明</a>
+            <a href="https://github.com/11ly322/kanmod/releases/tag/v0.0.7" target="_blank" rel="noopener">查看发布说明</a>
           </div>
         </div>
       </div>
@@ -441,7 +468,7 @@
       <div class="container closing-inner">
         <img src="assets/logo.svg" width="44" height="44" alt="">
         <p>下一次点火，别再和前置依赖较劲。</p>
-        <a class="btn btn-primary" href="https://github.com/11ly322/kanmod/releases/download/v0.0.6/kanmod-setup-0.0.6.exe">下载 kanmod 0.0.6</a>
+        <a class="btn btn-primary" href="https://github.com/11ly322/kanmod/releases/download/v0.0.7/kanmod-setup-0.0.7.exe">下载 kanmod 0.0.7</a>
       </div>
     </section>
   </main>

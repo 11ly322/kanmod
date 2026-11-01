@@ -25,6 +25,7 @@ export const DEFAULT_CONFIG = {
     allowWarning: false,
     allowUnknown: false,
     keepDownloads: true,
+    autoDependencies: true,
   },
   network: {
     timeoutSeconds: 45,
@@ -91,6 +92,7 @@ function sanitizeConfig(config) {
   clean.network.maxDownloadMB = Math.min(8192, Math.max(64, Number(clean.network.maxDownloadMB) || 2048));
   clean.install.allowWarning = Boolean(clean.install.allowWarning);
   clean.install.allowUnknown = Boolean(clean.install.allowUnknown);
+  clean.install.autoDependencies = clean.install.autoDependencies !== false;
   clean.ui.pageSize = Math.min(96, Math.max(6, Number(clean.ui.pageSize) || 24));
   clean.ui.autoTranslate = clean.ui.autoTranslate !== false;
   clean.curseforgeApiKey = String(clean.curseforgeApiKey || '');

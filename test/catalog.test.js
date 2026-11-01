@@ -71,3 +71,26 @@ test('resolvePlan 报告缺失前置', () => {
   assert.equal(plan.missing.length, 1);
   assert.equal(plan.missing[0].name, 'NotInIndex');
 });
+
+test('resolvePlan 可在关闭自动依赖时只安装根模组', () => {
+  const catalog = new Catalog([
+    pkg('Dependency', '1.0.0'),
+    pkg('RootWithDependency', '1.0.0', {
+      depends: [{ name: 'Dependency', min_version: '1.0.0' }],
+    }),
+  ]);
+  const plan = resolvePlan({
+    catalog,
+    roots: ['RootWithDependency'],
+    kspVersion: '1.12.5',
+    installed: [],
+    includeDependencies: false,
+  });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(
+    plan.installOrder.map((node) => node.identifier),
+    ['RootWithDependency'],
+  );
+  assert.equal(plan.summary.install, 1);
+  assert.equal(plan.summary.missing, 0);
+});

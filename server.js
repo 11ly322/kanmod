@@ -17,8 +17,10 @@ import { downloadPackage } from './src/downloads.js';
 import { installArchive, previewInstall, uninstallRecord } from './src/installer.js';
 import { diagnoseGame, findLogFile, planRepairs } from './src/diagnostics.js';
 import { JobQueue } from './src/jobs.js';
-import { translateText, TranslationError, cleanSourceText } from './src/translate.js';
+import { translateText, TranslationError, cleanSourceText, hasAnyChinese } from './src/translate.js';
+import { tagTranslations, translateTag } from './src/tagTranslations.js';
 import { searchModImages, fetchImageBuffer } from './src/modImages.js';
+import { searchCurseForge, curseforgeRequest, curseforgeConfigured, mapCurseForgeDetail, CurseForgeError } from './src/curseforge.js';
 import {
   DisabledStore,
   computeUpdates,
@@ -32,7 +34,7 @@ import { safeFileName } from './src/util/paths.js';
 import { normalizeIdentifier } from './src/util/version.js';
 
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
-const APP_VERSION = '0.0.6';
+const APP_VERSION = '0.0.7';
 const MAX_JSON_BODY = 4 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const COOKIE_NAME = 'kanmod_token';
@@ -145,7 +147,7 @@ function sendError(res, error) {
   const status = error?.status
     || (error instanceof TranslationError
       ? (error.code === 'TRANSLATION_DEMO_MISSING' ? 409 : 502)
-      : (error?.code === 'CATALOG_LOAD_FAILED' ? 502 : 500));
+      : (error?.code === 'CATALOG_LOAD_FAILED' ? 502 : (error instanceof CurseForgeError ? (error.code === 'CURSEFORGE_KEY_MISSING' ? 400 : 502) : 500)));
   const payload = {
     error: {
       message: error?.message || '服务器内部错误。',
@@ -583,6 +585,9 @@ async function resolveFor(context, roots, body = {}) {
       ? Boolean(current.install.allowUnknown || !(runtime.scan.kspVersion || runtime.info.version))
       : Boolean(body.allowUnknown),
     includeRecommended: Boolean(body.includeRecommended),
+    includeDependencies: body.autoDependencies === undefined
+      ? current.install.autoDependencies !== false
+      : Boolean(body.autoDependencies),
   });
   return { runtime, installed, plan };
 }
@@ -757,6 +762,114 @@ function installFromUpload(context, upload, title) {
   }, { instanceId: context.configStore.get().activeInstanceId, uploadId: upload.id });
 }
 
+async function translateBatch(context, items, { force = false } = {}) {
+  const queue = items.map((item, index) => ({ ...item, index }));
+  const results = new Array(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < queue.length) {
+      const item = queue[cursor];
+      cursor += 1;
+      const field = ['name', 'tag', 'abstract', 'description', 'query'].includes(item.field) ? item.field : 'abstract';
+      const text = String(item.text || '').trim().slice(0, 6000);
+      if (!text) {
+        results[item.index] = { key: item.key || null, field, error: 'EMPTY_TEXT' };
+        continue;
+      }
+      try {
+        if (field === 'tag') {
+          const local = translateTag(text);
+          if (local && local !== text) {
+            results[item.index] = {
+              key: item.key || null,
+              field,
+              translation: { text: local, provider: 'kanmod 标签词典', cached: true, translated: true, machine: false },
+            };
+            continue;
+          }
+        }
+        const translation = await translateText({
+          text,
+          identifier: String(item.identifier || ''),
+          version: String(item.version || ''),
+          field,
+          demo: Boolean(context.demo),
+          force: Boolean(force),
+          timeoutMs: 6500,
+        });
+        results[item.index] = { key: item.key || null, field, translation };
+      } catch (error) {
+        results[item.index] = {
+          key: item.key || null,
+          field,
+          error: error?.code || 'TRANSLATION_FAILED',
+          message: error?.message || '翻译失败',
+        };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  return results;
+}
+
+async function translateSearchQuery(context, query) {
+  const text = String(query || '').trim();
+  if (!text || !hasAnyChinese(text)) return { query: text, translated: null };
+  const reverse = Object.entries(tagTranslations()).find(([, label]) => label === text);
+  if (reverse) return { query: reverse[0], translated: reverse[0], tag: true };
+  try {
+    const translation = await translateText({
+      text,
+      field: 'query',
+      demo: Boolean(context.demo),
+      timeoutMs: 3500,
+    });
+    if (translation.translated && translation.text && translation.text !== text) {
+      return { query: translation.text, translated: translation.text };
+    }
+  } catch {
+    // 搜索在离线时仍然使用原始关键词。
+  }
+  return { query: text, translated: null };
+}
+
+async function pathSize(target) {
+  let total = 0;
+  let stat;
+  try {
+    stat = await fs.stat(target);
+  } catch {
+    return 0;
+  }
+  if (!stat.isDirectory()) return stat.size;
+  let entries = [];
+  try {
+    entries = await fs.readdir(target, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    total += await pathSize(path.join(target, entry.name));
+  }
+  return total;
+}
+
+async function cacheStatus() {
+  const targets = {
+    downloads: path.join(DATA_DIR, 'downloads'),
+    images: path.join(DATA_DIR, 'images'),
+    translations: path.join(DATA_DIR, 'translations'),
+  };
+  const sizes = {};
+  let total = 0;
+  for (const [key, target] of Object.entries(targets)) {
+    const bytes = await pathSize(target);
+    sizes[key] = { bytes, label: formatBytes(bytes) };
+    total += bytes;
+  }
+  return { total, totalLabel: formatBytes(total), targets: sizes };
+}
+
 async function handleApi(req, res, context, url) {
   const { pathname } = url;
   const method = req.method || 'GET';
@@ -827,6 +940,7 @@ async function handleApi(req, res, context, url) {
       catalog: catalogStatus(context),
       settings: publicSettings(context),
       sources: listCatalogSources(config),
+      tagLabels: tagTranslations(),
       jobs: context.jobs.list().slice(0, 15),
       stats: runtime ? {
         installed: installed.entries.length,
@@ -936,6 +1050,71 @@ async function handleApi(req, res, context, url) {
     return sendJson(res, 200, { status: catalogStatus(context) });
   }
 
+  if (method === 'GET' && pathname === '/api/curseforge/search') {
+    const config = context.configStore.get();
+    if (!curseforgeConfigured(config)) {
+      return sendJson(res, 200, {
+        needsKey: true,
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: Number(url.searchParams.get('pageSize')) || config.ui.pageSize,
+        message: '在设置中填写 CurseForge API Key 后即可检索 Forge 项目。',
+      });
+    }
+    let kspVersion = null;
+    try {
+      const runtime = await getRuntime(context);
+      kspVersion = runtime.scan.kspVersion || runtime.info.version || null;
+    } catch {
+      // Forge browsing does not require a selected KSP instance.
+    }
+    const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+    const pageSize = Math.min(50, Math.max(6, Number(url.searchParams.get('pageSize')) || config.ui.pageSize));
+    const result = await searchCurseForge({
+      apiKey: config.curseforgeApiKey,
+      query: url.searchParams.get('q') || '',
+      page,
+      pageSize,
+      sort: url.searchParams.get('sort') || 'popularity',
+      kspVersion,
+    });
+    return sendJson(res, 200, {
+      ...result,
+      source: 'curseforge',
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(result.total / pageSize)),
+      kspVersion,
+      configured: true,
+    });
+  }
+
+  const curseforgeDetail = pathname.match(/^\/api\/curseforge\/mod\/(\d+)$/);
+  if (method === 'GET' && curseforgeDetail) {
+    const config = context.configStore.get();
+    if (!curseforgeConfigured(config)) {
+      throw new CurseForgeError('尚未配置 CurseForge API Key，请在设置中填写。', 'CURSEFORGE_KEY_MISSING');
+    }
+    const apiKey = config.curseforgeApiKey;
+    const id = curseforgeDetail[1];
+    let kspVersion = null;
+    try {
+      const runtime = await getRuntime(context);
+      kspVersion = runtime.scan.kspVersion || runtime.info.version || null;
+    } catch {
+      // Detail can still be viewed without an instance.
+    }
+    const [mod, description, screenshots] = await Promise.all([
+      curseforgeRequest(`/mods/${id}`, { apiKey }),
+      curseforgeRequest(`/mods/${id}/description`, { apiKey }).catch(() => ''),
+      curseforgeRequest(`/mods/${id}/screenshots`, { apiKey }).catch(() => []),
+    ]);
+    if (!mod) throw new CurseForgeError('CurseForge 项目不存在。', 'CURSEFORGE_NOT_FOUND');
+    const data = mapCurseForgeDetail(mod, { kspVersion, description, screenshots });
+    return sendJson(res, 200, data);
+  }
+
   if (method === 'GET' && pathname === '/api/catalog') {
     const config = context.configStore.get();
     const catalog = context.catalogStore.catalog;
@@ -943,7 +1122,7 @@ async function handleApi(req, res, context, url) {
       return sendJson(res, 200, {
         items: [], total: 0, page: 1, pageSize: config.ui.pageSize, pageCount: 1,
         catalog: catalogStatus(context),
-        facets: { tags: [] },
+        facets: { tags: [], tagLabels: tagTranslations() },
       });
     }
     let runtime = null;
@@ -953,8 +1132,10 @@ async function handleApi(req, res, context, url) {
       runtime = null;
     }
     const installed = runtime ? installedData(runtime.scan, runtime.registry) : { identifiers: new Set(), versions: new Map() };
+    const rawQuery = url.searchParams.get('q') || '';
+    const queryInfo = await translateSearchQuery(context, rawQuery);
     const result = catalog.search({
-      query: url.searchParams.get('q') || '',
+      query: queryInfo.query,
       kspVersion: runtime?.scan.kspVersion || runtime?.info.version || null,
       allowWarning: config.install.allowWarning,
       page: Number(url.searchParams.get('page')) || 1,
@@ -970,7 +1151,11 @@ async function handleApi(req, res, context, url) {
       ...result,
       catalog: catalogStatus(context),
       kspVersion: runtime?.scan.kspVersion || null,
-      facets: { tags: catalog.tagFacets() },
+      queryTranslation: queryInfo.translated,
+      facets: {
+        tags: catalog.tagFacets().map((facet) => ({ ...facet, label: translateTag(facet.tag) })),
+        tagLabels: tagTranslations(),
+      },
     });
   }
 
@@ -1061,6 +1246,14 @@ async function handleApi(req, res, context, url) {
     });
     child.unref();
     return sendJson(res, 202, { ok: true, version: APP_VERSION });
+  }
+
+  if (method === 'POST' && pathname === '/api/translate/batch') {
+    const body = await readJsonBody(req);
+    const items = Array.isArray(body.items) ? body.items.slice(0, 48) : [];
+    if (!items.length) throw new HttpError(400, '没有需要翻译的内容。', 'EMPTY_TEXT');
+    const results = await translateBatch(context, items, { force: Boolean(body.force) });
+    return sendJson(res, 200, { results });
   }
 
   if (method === 'POST' && pathname === '/api/translate') {
@@ -1547,7 +1740,7 @@ async function handleApi(req, res, context, url) {
     const patch = {};
     if (isObject(body.install)) {
       patch.install = {};
-      for (const key of ['backupOverwrite', 'allowWarning', 'allowUnknown', 'keepDownloads']) {
+      for (const key of ['backupOverwrite', 'allowWarning', 'allowUnknown', 'keepDownloads', 'autoDependencies']) {
         if (body.install[key] !== undefined) patch.install[key] = Boolean(body.install[key]);
       }
     }
@@ -1585,6 +1778,92 @@ async function handleApi(req, res, context, url) {
     await context.configStore.update(patch);
     context.catalogStore.allowInsecureHttp = Boolean(context.configStore.get().network.allowInsecureHttp);
     return sendJson(res, 200, { settings: publicSettings(context), sources: listCatalogSources(context.configStore.get()) });
+  }
+
+  if (method === 'POST' && pathname === '/api/game/launch') {
+    const runtime = await getRuntime(context);
+    const executable = runtime.info.executable;
+    if (!executable || !(await pathExists(executable))) {
+      throw new HttpError(409, '没有找到 KSP 可执行文件，请重新选择游戏目录。', 'GAME_EXECUTABLE_NOT_FOUND');
+    }
+    const child = spawn(executable, [], {
+      cwd: runtime.instance.path,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    });
+    child.unref();
+    return sendJson(res, 202, { ok: true, path: executable, pid: child.pid || null });
+  }
+
+  if (method === 'GET' && pathname === '/api/cache/status') {
+    return sendJson(res, 200, { cache: await cacheStatus() });
+  }
+
+  if (method === 'POST' && pathname === '/api/cache/clear') {
+    const body = await readJsonBody(req);
+    const allowed = new Set(['downloads', 'images', 'translations']);
+    const targets = (Array.isArray(body.targets) ? body.targets : ['downloads', 'images', 'translations'])
+      .map(String)
+      .filter((target) => allowed.has(target));
+    if (!targets.length) throw new HttpError(400, '没有可清理的缓存类型。', 'BAD_CACHE_TARGET');
+    const before = await cacheStatus();
+    for (const target of targets) {
+      const directory = path.join(DATA_DIR, target);
+      await fs.rm(directory, { recursive: true, force: true }).catch(() => {});
+      await ensureDir(directory);
+    }
+    const after = await cacheStatus();
+    return sendJson(res, 200, { ok: true, cleared: Math.max(0, before.total - after.total), cache: after });
+  }
+
+  if (method === 'GET' && pathname === '/api/modpack/export') {
+    const runtime = await getRuntime(context);
+    const data = await installedFor(context, runtime);
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+    const depends = data.installed
+      .filter((entry) => entry.identifier)
+      .map((entry) => ({ name: entry.identifier, version: entry.installedVersion || undefined }));
+    const modpack = {
+      spec_version: 1,
+      identifier: `kanmod-export-${stamp}`,
+      name: 'kanmod 模组包',
+      version: stamp,
+      abstract: `kanmod 导出的模组包，共 ${depends.length} 个模组。`,
+      license: 'MIT',
+      kind: 'metapackage',
+      ksp_version: runtime.scan.kspVersion || null,
+      depends,
+    };
+    const body = JSON.stringify(modpack, null, 2);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="kanmod-modpack-${stamp}.ckan"`,
+      'Content-Length': Buffer.byteLength(body),
+    });
+    return res.end(body);
+  }
+
+  if (method === 'POST' && pathname === '/api/modpack/preview') {
+    requireCatalog(context);
+    const body = await readJsonBody(req);
+    const depends = Array.isArray(body.depends)
+      ? body.depends
+      : Array.isArray(body.package?.depends) ? body.package.depends : [];
+    const roots = depends
+      .map((relation) => (typeof relation === 'string' ? relation : relation?.name))
+      .filter(Boolean);
+    if (!roots.length) throw new HttpError(400, '这个模组包没有可安装的依赖。', 'EMPTY_MODPACK');
+    const { plan } = await resolveFor(context, roots, body);
+    return sendJson(res, 200, {
+      modpack: {
+        identifier: String(body.identifier || body.package?.identifier || 'modpack'),
+        name: String(body.name || body.package?.name || '导入的模组包'),
+        version: String(body.version || body.package?.version || ''),
+        count: roots.length,
+      },
+      plan,
+    });
   }
 
   if (method === 'POST' && pathname === '/api/open') {

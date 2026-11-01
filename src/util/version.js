@@ -107,6 +107,16 @@ function sameBase(left, right) {
   return true;
 }
 
+function compareKspBound(target, bound, isMaximum) {
+  const width = bound.numbers.length <= 2 ? 2 : Math.max(3, Math.min(bound.numbers.length, 4));
+  for (let index = 0; index < width; index += 1) {
+    const left = target.numbers[index] ?? 0;
+    const right = bound.numbers[index] ?? 0;
+    if (left !== right) return isMaximum ? right - left : left - right;
+  }
+  return 0;
+}
+
 /**
  * Returns one of: compatible | warning | incompatible | unknown.
  * `warning` means "could work but was not verified for this exact game
@@ -135,7 +145,7 @@ export function checkKspCompatibility(kspVersion, pkg = {}) {
   const max = maxRaw ? parseKspVersion(maxRaw) : null;
 
   if (strict && declared) {
-    if (sameBase(target, declared)) {
+    if (sameBase(target, declared) || (declared.numbers.length <= 2 && sameMajorMinor(target, declared))) {
       return {
         status: 'compatible',
         label: '精确适配',
@@ -152,8 +162,8 @@ export function checkKspCompatibility(kspVersion, pkg = {}) {
   }
 
   if (min || max) {
-    const minOk = !min || compareVersions(target, min) >= 0;
-    const maxOk = !max || compareVersions(target, max) <= 0;
+    const minOk = !min || compareKspBound(target, min, false) >= 0;
+    const maxOk = !max || compareKspBound(target, max, true) >= 0;
     if (minOk && maxOk) {
       return {
         status: 'compatible',
@@ -171,7 +181,7 @@ export function checkKspCompatibility(kspVersion, pkg = {}) {
   }
 
   if (declared) {
-    if (sameBase(target, declared)) {
+    if (sameBase(target, declared) || (declared.numbers.length <= 2 && sameMajorMinor(target, declared))) {
       return {
         status: 'compatible',
         label: '兼容',

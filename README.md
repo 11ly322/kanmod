@@ -4,21 +4,24 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.0.6-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.0.7-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
 - **KSP 实例检测**：扫描 Steam 库、常见安装目录，也可以手动选择包含 `GameData` 的游戏目录；自动读取 KSP 版本。
-- **CKAN 模组索引**：从官方 CKAN-meta 或自定义 tar.gz / zip / JSON 导入索引，本地缓存，离线可查。
-- **依赖解析与前置安装**：递归解析硬依赖、版本范围、虚拟 provides，生成安装顺序，只选择兼容版本。
-- **多下载源回退**：CKAN 直链 → 镜像前缀 → GitHub Releases → SpaceDock；失败时保留每次尝试记录。下载支持 SHA256 校验。
-- **安全安装**：按 CKAN `install` 规则落到 GameData / Ships / Missions 等位置；覆盖前备份；写盘失败回滚；卸载移动到回收站。
+- **社区模组索引**：支持社区 `.ckan` 元数据索引，也可导入 tar.gz / zip / JSON，本地缓存，离线可查。
+- **依赖解析与前置安装**：递归解析硬依赖、版本范围、虚拟 provides，生成安装顺序，只选择兼容版本；自动解析前置依赖可在设置中关闭。
+- **多下载源回退**：索引直链 → 镜像前缀 → GitHub Releases → SpaceDock；失败时保留每次尝试记录。下载支持 SHA256 校验。
+- **安全安装**：按 `.ckan` 的 install 规则落到 GameData / Ships / Missions 等位置；覆盖前备份；写盘失败回滚；卸载移动到回收站。
 - **模组管理**：禁用（移动到 `KSP/DisabledMods`，不会继续被加载）、启用、删除到回收站；快捷更新管理器可勾选或全部更新，已安装页支持批量禁用/启用/删除；不会直接删除游戏文件。
-- **图片与筛选**：模组简介页从 SpaceDock、CKAN 简介与 GitHub README 检索展示图片，经本地代理缓存；模组库可按标签、体积筛选，已安装页可按全部/可更新/已禁用/手动安装筛选。
+- **图片与筛选**：模组简介页从 SpaceDock、索引说明与 GitHub README 检索展示图片，经本地代理缓存；模组库可按标签、体积筛选，已安装页可按全部/可更新/已禁用/手动安装筛选。
+- **CurseForge 浏览**：配置 API Key 后可检索 KSP 项目，查看封面、截图、说明，并自动翻译标题与说明；下载与安装请前往项目页。
+- **游戏启动**：检测到 KSP 实例后可在软件内直接启动游戏。
+- **模组包与缓存**：导出/导入 `.ckan` 模组包，生成依赖安装计划；查看并清理下载、图片、翻译缓存。
 - **应用更新**：安装器内置独立更新程序，开始菜单提供「更新 kanmod」；设置页也可检查 GitHub 最新版本。更新会保留安装目录中的游戏模组与数据。
 - **问题诊断**：检查缺失前置、版本约束、冲突、KSP 兼容性、重复 DLL、安装记录漂移，并读取 `KSP.log` / `output_log.txt` / `Player.log` 的异常。自动修复只处理安全的依赖安装/兼容更新，冲突移除必须确认。
 - **模组关联**：依赖图、被依赖、推荐、冲突，以及模组简介页的一键跳转。
-- **中文翻译**：打开英文模组简介时自动翻译简介；完整说明可手动翻译。支持 Google / MyMemory 在线翻译、本地缓存和演示内置翻译。机器翻译仅供参考。
+- **中文翻译**：自动翻译英文模组的标题与简介，标签使用本地词典；完整说明可手动翻译。支持 Google / MyMemory 在线翻译、本地缓存和演示内置翻译。机器翻译仅供参考。
 - **本地 Web UI**：白底红色点缀，中文界面，支持键盘导航。仅监听 `127.0.0.1`，启动令牌保护 API。
 
 ## 运行环境
@@ -30,7 +33,7 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.6.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.7.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
 默认安装位置  第一个非 C 盘的 \Programs\kanmod（可在安装器里修改）
@@ -99,18 +102,18 @@ data/
 
 ## 网络与索引
 
-官方 CKAN 索引：
+社区 `.ckan` 索引源：
 
 ```text
 https://github.com/KSP-CKAN/CKAN-meta/archive/refs/heads/master.tar.gz
 ```
 
-下载失败时可添加 GitHub 加速镜像，或在“设置 → 索引源”中导入自定义索引。索引只包含元数据；模组文件从 CKAN、SpaceDock、GitHub 等地址下载。
+下载失败时可添加 GitHub 加速镜像，或在“设置 → 索引源”中导入自定义索引。索引只包含元数据；模组文件从索引直链、SpaceDock、GitHub 等地址下载。CurseForge 项目通过官方 API 只读浏览，下载与安装请前往项目页。
 
 ## 开发
 
 ```powershell
-npm test          # 15 项单元测试
+npm test          # 24 项单元测试
 npm run check     # 语法检查
 ```
 
@@ -120,10 +123,12 @@ npm run check     # 语法检查
 bin/kanmod.js        源码启动器
 server.js            本地 HTTP API、认证、SSE、静态 UI
 src/ksp/             KSP 检测、版本、GameData 扫描
-src/catalog/         CKAN 规范化、索引加载、依赖解析、下载源
+src/catalog/         .ckan 规范化、索引加载、依赖解析、下载源
 src/installer.js     安装/卸载/回滚
 src/diagnostics.js   依赖与日志诊断
 src/translate.js     翻译与缓存
+src/tagTranslations.js 标签中文词典
+src/curseforge.js    CurseForge 只读检索与详情映射
 src/downloads.js     多源下载
 public/              原生 ES module SPA（无构建步骤）
 packaging/           Windows EXE 启动器与安装器（C#，无第三方依赖）
@@ -138,14 +143,14 @@ test/                Node 内置测试
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.0.6.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
+产物位于 `.artifacts/build/kanmod-setup-0.0.7.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
 
 ## 已知限制
 
 - 安装器未做代码签名，Windows SmartScreen 可能提示“未知发布者”；请核对下载来源为本仓库 Releases。
 - 当前版本只实现 KSP 1；KSP 2 的目录与元数据格式不同。
-- 已用真实 KSP 1.12.5 实例做过只读扫描验证；未在真实游戏内执行禁用、更新或删除，建议首次操作前保留 `GameData` 备份。
-- CurseForge 需要 API Key，配置项已保留，但尚未接入其下载 API。
+- 已用真实 KSP 1.12.5 实例做过只读扫描验证；未在真实游戏内执行批量禁用、更新或删除，建议首次操作前保留 `GameData` 备份。
+- CurseForge 通过官方 API 只读浏览，需要 API Key；不通过其 API 下载或安装项目。
 - 在线翻译依赖第三方公开端点，可能限流或不可用；失败会在界面显示并允许重试。
 
 ## 许可

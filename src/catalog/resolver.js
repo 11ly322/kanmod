@@ -38,7 +38,7 @@ function rootInput(root) {
  * silently. The resolver never installs a package whose declared KSP range
  * fails unless the caller opts into warnings/unknown versions.
  */
-export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], allowWarning = false, allowUnknown = false, includeRecommended = false }) {
+export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], allowWarning = false, allowUnknown = false, includeRecommended = false, includeDependencies = true }) {
   if (!catalog) throw new Error('模组索引尚未加载，无法解析依赖。');
   const options = { allowWarning, allowUnknown };
   const installedById = new Map();
@@ -349,8 +349,10 @@ export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], a
       });
     }
     if (!previous || previous.version !== node.version) {
-      for (const dependency of node.package.depends || []) {
-        queue.push({ relation: dependency, parent: node, isRoot: false });
+      if (includeDependencies) {
+        for (const dependency of node.package.depends || []) {
+          queue.push({ relation: dependency, parent: node, isRoot: false });
+        }
       }
     }
     inspectConflicts(node);
