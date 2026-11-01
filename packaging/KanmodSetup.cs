@@ -14,18 +14,22 @@ using Kanmod.Installer;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.1.3.0")]
-[assembly: AssemblyFileVersion("0.1.3.0")]
-[assembly: AssemblyInformationalVersion("0.1.3")]
+[assembly: AssemblyVersion("0.1.4.0")]
+[assembly: AssemblyFileVersion("0.1.4.0")]
+[assembly: AssemblyInformationalVersion("0.1.4")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.1.3";
+    internal const string AppVersion = "0.1.4";
 
     [STAThread]
     private static int Main(string[] args)
     {
         Log("start args: " + string.Join(" | ", args));
+        // The updater launches us from inside the install directory; a process
+        // whose current directory is the install folder keeps a handle on it,
+        // and Windows then refuses to delete or rename it ("正由另一进程使用").
+        try { Environment.CurrentDirectory = Path.GetTempPath(); } catch { }
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -140,30 +144,58 @@ internal static class Program
 
         try
         {
-            if (Directory.Exists(targetDir))
-            {
-                // Refuse early with an actionable message when an older elevated
-                // install left a directory this user cannot replace.
-                InstallerCore.RequireUserAccess(targetDir, Log);
-                InstallerCore.DeleteDirectoryWithRetry(targetDir, Log);
-            }
-            Directory.CreateDirectory(targetDir);
-            InstallerCore.EnsureUserAccess(targetDir, Log);
-
-            string tempZip = Path.Combine(targetDir, ".kanmod-payload.zip");
+            // Build the new payload next to the target before touching the old
+            // install: a corrupt payload, full disk or antivirus lock must never
+            // leave the user with a deleted app and no replacement.
+            string staging = Path.Combine(
+                Path.GetDirectoryName(targetDir),
+                "." + Path.GetFileName(targetDir) + ".staging-" + DateTime.Now.Ticks);
+            Directory.CreateDirectory(staging);
             try
             {
-                using (Stream resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
+                string tempZip = Path.Combine(staging, ".kanmod-payload.zip");
+                try
                 {
-                    if (resource == null) throw new InvalidOperationException("安装包资源缺失。");
-                    using (var file = File.Create(tempZip)) resource.CopyTo(file);
+                    using (Stream resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
+                    {
+                        if (resource == null) throw new InvalidOperationException("安装包资源缺失。");
+                        using (var file = File.Create(tempZip)) resource.CopyTo(file);
+                    }
+                    ZipFile.ExtractToDirectory(tempZip, staging);
                 }
-                ZipFile.ExtractToDirectory(tempZip, targetDir);
+                finally
+                {
+                    try { File.Delete(tempZip); } catch { }
+                }
+
+                if (!File.Exists(Path.Combine(staging, "kanmod.exe")))
+                    throw new InvalidOperationException("安装包不完整：缺少 kanmod.exe。");
+                if (!File.Exists(Path.Combine(staging, "node.exe")))
+                    throw new InvalidOperationException("安装包不完整：缺少 node.exe。");
+                if (!File.Exists(Path.Combine(staging, "uninstall.exe")))
+                    throw new InvalidOperationException("安装包不完整：缺少 uninstall.exe。");
+                if (!File.Exists(Path.Combine(staging, "kanmod-update.exe")))
+                    throw new InvalidOperationException("安装包不完整：缺少 kanmod-update.exe。");
+                InstallerCore.EnsureUserAccess(staging, Log);
+
+                if (Directory.Exists(targetDir))
+                {
+                    // Refuse early with an actionable message when an older elevated
+                    // install left a directory this user cannot replace.
+                    InstallerCore.RequireUserAccess(targetDir, Log);
+                    InstallerCore.DeleteDirectoryWithRetry(targetDir, Log);
+                }
+                if (Directory.Exists(targetDir))
+                    throw new IOException("安装目录仍被占用，无法替换：" + targetDir);
+                Directory.Move(staging, targetDir);
             }
-            finally
+            catch
             {
-                try { File.Delete(tempZip); } catch { }
+                try { if (Directory.Exists(staging)) Directory.Delete(staging, true); } catch { }
+                throw;
             }
+
+            InstallerCore.EnsureUserAccess(targetDir, Log);
 
             string exe = Path.Combine(targetDir, "kanmod.exe");
             string uninstaller = Path.Combine(targetDir, "uninstall.exe");
@@ -199,6 +231,7 @@ internal static class Program
             RegisterUninstall(targetDir, exe, uninstaller);
 
             CleanupLegacy(legacyInstall, legacyData, targetDir);
+            CleanupStaleInstalls(targetDir);
         }
         catch
         {
@@ -208,6 +241,23 @@ internal static class Program
             }
             throw;
         }
+    }
+
+    // Leftovers from the rename fallback in DeleteDirectoryWithRetry (old install
+    // trees that could not be deleted in place). Only touch ".old-" siblings so
+    // the ".data-" backup is never at risk.
+    private static void CleanupStaleInstalls(string targetDir)
+    {
+        try
+        {
+            string parent = Path.GetDirectoryName(targetDir);
+            if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent)) return;
+            foreach (string dir in Directory.GetDirectories(parent, "." + Path.GetFileName(targetDir) + ".old-*"))
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+        }
+        catch { }
     }
 
     private static void CreateIcons(string targetDir, string exe, string uninstaller, string updater)

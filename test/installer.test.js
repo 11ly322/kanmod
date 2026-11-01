@@ -58,3 +58,37 @@ test('installArchive 写入 GameData 并可安全卸载到回收站', async () =
   await assert.rejects(fs.access(path.join(ksp, 'GameData/TestMod/TestMod.dll')));
   await fs.rm(root, { recursive: true, force: true });
 });
+
+test('find_regexp 配合 find_matches_files 可以安装单个 DLL', async () => {
+  const root2 = path.join(os.tmpdir(), 'kanmod-test-installer-regexp');
+  await fs.rm(root2, { recursive: true, force: true });
+  const ksp = path.join(root2, 'ksp');
+  const archive = path.join(root2, 'ModuleManager-4.2.3.zip');
+  await fs.mkdir(path.join(ksp, 'GameData'), { recursive: true });
+  await fs.mkdir(path.dirname(archive), { recursive: true });
+  await fs.writeFile(archive, createZip([
+    { name: 'ModuleManager-4.2.3.dll', data: Buffer.from('mm dll') },
+    { name: 'LICENSE', data: Buffer.from('license') },
+  ], { compress: true }));
+
+  const result = await installArchive({
+    archivePath: archive,
+    kspPath: ksp,
+    packageInfo: {
+      identifier: 'ModuleManager',
+      name: 'Module Manager',
+      version: '4.2.3',
+      install: [{
+        find_regexp: 'ModuleManager.*\.dll$',
+        find_matches_files: true,
+        install_to: 'GameData',
+      }],
+    },
+    settings: { install: { backupOverwrite: true } },
+    backupsDir: path.join(root2, 'backups'),
+  });
+
+  assert.ok(result.record.files.includes('GameData/ModuleManager-4.2.3.dll'));
+  await assert.doesNotReject(fs.access(path.join(ksp, 'GameData/ModuleManager-4.2.3.dll')));
+  await fs.rm(root2, { recursive: true, force: true });
+});

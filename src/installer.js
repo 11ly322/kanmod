@@ -177,7 +177,7 @@ function findDirectory(entries, needle) {
   return { kind: 'dir', root, entries: entries.filter((entry) => entry.rel.toLowerCase().startsWith(`${root.toLowerCase()}/`)) };
 }
 
-function findRegexp(entries, pattern) {
+function findRegexp(entries, pattern, matchFiles = false) {
   let regexp;
   try {
     regexp = new RegExp(pattern, 'i');
@@ -185,12 +185,28 @@ function findRegexp(entries, pattern) {
     throw new Error(`CKAN 索引中的 find_regexp 无效：${pattern}`);
   }
   const dirs = allDirectories(entries).filter((dir) => regexp.test(dir) || regexp.test(basename(dir)));
-  if (!dirs.length) return null;
-  const minDepth = Math.min(...dirs.map((dir) => dir.split('/').length));
-  const shallow = dirs.filter((dir) => dir.split('/').length === minDepth);
-  if (shallow.length > 1) throw new Error(`压缩包里有多个目录匹配 ${pattern}，无法确定安装哪一个。`);
-  const root = shallow[0];
-  return { kind: 'dir', root, entries: entries.filter((entry) => entry.rel.toLowerCase().startsWith(`${root.toLowerCase()}/`)) };
+  if (dirs.length) {
+    const minDepth = Math.min(...dirs.map((dir) => dir.split('/').length));
+    const shallow = dirs.filter((dir) => dir.split('/').length === minDepth);
+    if (shallow.length > 1) throw new Error(`压缩包里有多个目录匹配 ${pattern}，无法确定安装哪一个。`);
+    const root = shallow[0];
+    return { kind: 'dir', root, entries: entries.filter((entry) => entry.rel.toLowerCase().startsWith(`${root.toLowerCase()}/`)) };
+  }
+  // CKAN 允许 find_regexp 命中文件（find_matches_files）。单文件包（例如
+  // ModuleManager 的 ModuleManager.*\.dll$）只能靠这条规则安装。
+  if (!matchFiles) return null;
+  const files = entries.filter((entry) => regexp.test(entry.rel) || regexp.test(basename(entry.rel)));
+  if (!files.length) return null;
+  if (files.length > 1) {
+    const shown = files.slice(0, 4).map((entry) => entry.rel).join('、');
+    throw new Error(`压缩包里有多个文件匹配 ${pattern}（${shown}），无法确定安装哪一个。`);
+  }
+  return { kind: 'file', root: files[0].rel, entries: [files[0]] };
+}
+
+function archiveOutline(entries) {
+  const tops = [...new Set(entries.map((entry) => entry.rel.split('/')[0]))].slice(0, 8);
+  return tops.length ? `（压缩包顶层：${tops.join('、')}）` : '';
 }
 
 function inferDirective(entries, pkg) {
@@ -244,18 +260,20 @@ function buildMappings(entries, pkg, onProgress = () => {}) {
     } else if (directive.find) {
       selected = findDirectory(entries, directive.find);
       if (!selected && directive.find_matches_files) {
-        const exact = entries.find((entry) => basename(entry.rel).toLowerCase() === String(directive.find).toLowerCase());
+        const wanted = normalizeRel(String(directive.find)).toLowerCase();
+        const exact = entries.find((entry) => entry.rel.toLowerCase() === wanted)
+          || entries.find((entry) => basename(entry.rel).toLowerCase() === basename(wanted));
         if (exact) selected = { kind: 'file', root: exact.rel, entries: [exact] };
       }
       if (!selected) {
         if (directive.optional) continue;
-        throw new Error(`安装包中找不到 CKAN 规则要求的目录：${directive.find}`);
+        throw new Error(`安装包中找不到 CKAN 规则要求的目录：${directive.find}${archiveOutline(entries)}`);
       }
     } else {
-      selected = findRegexp(entries, directive.find_regexp);
+      selected = findRegexp(entries, directive.find_regexp, directive.find_matches_files !== false);
       if (!selected) {
         if (directive.optional) continue;
-        throw new Error(`安装包中找不到匹配 ${directive.find_regexp} 的目录。`);
+        throw new Error(`安装包中找不到匹配 ${directive.find_regexp} 的目录或文件${archiveOutline(entries)}`);
       }
     }
 

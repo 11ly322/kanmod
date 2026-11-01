@@ -6,6 +6,7 @@ import { ensureDir, pathExists } from '../../util/fsx.js';
 import { listCatalogSources } from '../../catalog/sources.js';
 import { isObject } from '../shared.js';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { APP_VERSION } from '../../version.js';
@@ -19,7 +20,9 @@ router.post('/api/app/update', async (req, res, context, url) => {
       });
     }
     const child = spawn(updater, [], {
-      cwd: APP_ROOT,
+      // Running the updater with the install folder as cwd keeps that folder
+      // locked, which makes the installer fail to replace it ("正由另一进程使用").
+      cwd: os.tmpdir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: false,
