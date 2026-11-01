@@ -126,7 +126,7 @@ export async function fetchPublicProject(input, { fetchImpl = globalThis.fetch, 
   try {
     response = await fetchImpl(`${WIDGET_HOST}${path}`, {
       signal: controller.signal,
-      headers: { accept: 'application/json', 'user-agent': 'kanmod/0.1.5-alpha' },
+      headers: { accept: 'application/json', 'user-agent': 'kanmod/0.1.5-beta' },
     });
   } catch (error) {
     if (error?.name === 'AbortError') throw new PublicCurseForgeError('查询 CurseForge 项目超时，请稍后重试。', 'CURSEFORGE_PUBLIC_TIMEOUT');

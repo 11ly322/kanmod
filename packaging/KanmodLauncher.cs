@@ -14,11 +14,11 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("kanmod")]
 [assembly: AssemblyVersion("0.1.5.0")]
 [assembly: AssemblyFileVersion("0.1.5.0")]
-[assembly: AssemblyInformationalVersion("0.1.5-alpha")]
+[assembly: AssemblyInformationalVersion("0.1.5-beta")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.1.5-alpha";
+    private const string AppVersion = "0.1.5-beta";
 
     [STAThread]
     private static int Main(string[] args)

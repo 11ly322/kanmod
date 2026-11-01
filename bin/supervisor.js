@@ -21,7 +21,7 @@ const LOCK_FILE = path.join(DATA_DIR, 'supervisor.json');
 const LOG_FILE = path.join(DATA_DIR, 'supervisor.log');
 const RUNTIME_FILE = path.join(DATA_DIR, 'runtime.json');
 const CHILD_ENTRY = path.join(APP_ROOT, 'bin', 'kanmod.js');
-const APP_VERSION = '0.1.5-alpha';
+const APP_VERSION = '0.1.5-beta';
 
 let child = null;
 let stopping = false;
@@ -119,6 +119,8 @@ function startChild() {
         ...process.env,
         KANMOD_DATA_DIR: DATA_DIR,
         KANMOD_SUPERVISED: '1',
+        // The child exits on its own after the UI has been closed for a while.
+        KANMOD_AUTO_EXIT: '1',
       },
     });
   } catch (error) {
@@ -133,6 +135,13 @@ function startChild() {
     child = null;
     writeLock(null);
     if (stopping) {
+      cleanupAndExit(0);
+      return;
+    }
+    if (code === 0) {
+      // A clean exit means the server closed itself after the UI went away;
+      // do not keep the supervisor (and memory) alive behind an empty window.
+      log('服务正常退出（界面已关闭），守护进程一并退出');
       cleanupAndExit(0);
       return;
     }

@@ -28,6 +28,26 @@ function extensionFor(url, contentType = '') {
   return '.archive';
 }
 
+// 有些发布链接（例如 GitHub Release 资产）在 URL 和 Content-Type 里都看不出格式，
+// 下载后按文件头纠正扩展名，避免安装阶段把 zip 当成未知格式。
+async function sniffArchiveExtension(filePath) {
+  const handle = await fs.open(filePath, 'r').catch(() => null);
+  if (!handle) return null;
+  try {
+    const buffer = Buffer.alloc(8);
+    const { bytesRead } = await handle.read(buffer, 0, 8, 0);
+    const head = buffer.subarray(0, bytesRead);
+    const startsWith = (bytes) => bytes.every((byte, index) => head[index] === byte);
+    if (startsWith([0x50, 0x4b, 0x03, 0x04]) || startsWith([0x50, 0x4b, 0x05, 0x06])) return '.zip';
+    if (startsWith([0x1f, 0x8b])) return '.tar.gz';
+    if (startsWith([0x37, 0x7a, 0xbc, 0xaf])) return '.7z';
+    if (startsWith([0x52, 0x61, 0x72, 0x21])) return '.rar';
+    return null;
+  } finally {
+    await handle.close().catch(() => {});
+  }
+}
+
 function downloadUrls(value) {
   if (Array.isArray(value)) return value.filter((url) => typeof url === 'string' && url.trim());
   if (typeof value === 'string' && value.trim()) return [value.trim()];
@@ -363,8 +383,8 @@ export async function downloadPackage(pkg, options = {}) {
       const extension = extensionFor(item.url, item.contentType || '');
       const base = safeFileName(`${pkg.identifier}-${pkg.version}`, 'mod');
       const fileName = base.toLowerCase().endsWith(extension) ? base : `${base}${extension}`;
-      const target = path.join(destDir, fileName);
-      const metaFile = `${target}.json`;
+      let target = path.join(destDir, fileName);
+      let metaFile = `${target}.json`;
       onProgress({ phase: 'attempt', source: item.label, message: `尝试 ${item.label}` });
       try {
         if (item.kind !== 'demo') {
@@ -395,6 +415,17 @@ export async function downloadPackage(pkg, options = {}) {
             onProgress: progress,
           });
         if (item.kind !== 'demo') {
+          if (target.toLowerCase().endsWith('.archive')) {
+            const sniffed = await sniffArchiveExtension(target);
+            if (sniffed === '.zip' || sniffed === '.tar.gz') {
+              const renamed = `${target.slice(0, -'.archive'.length)}${sniffed}`;
+              await fs.rename(target, renamed).catch(() => {});
+              if (await fs.stat(renamed).catch(() => null)) {
+                target = renamed;
+                metaFile = `${target}.json`;
+              }
+            }
+          }
           await writeJsonAtomic(metaFile, {
             url: item.url,
             label: item.label,

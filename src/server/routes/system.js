@@ -11,9 +11,10 @@ import { spawn } from 'node:child_process';
 export function registerSystemRoutes(router) {
 router.post('/api/game/launch', async (req, res, context, url) => {
     const runtime = await getRuntime(context);
-    const executable = runtime.info.executable;
+    const name = runtime.info.executable;
+    const executable = name ? path.join(runtime.instance.path, name) : null;
     if (!executable || !(await pathExists(executable))) {
-      throw new HttpError(409, '没有找到 KSP 可执行文件，请重新选择游戏目录。', 'GAME_EXECUTABLE_NOT_FOUND');
+      throw new HttpError(409, '没有找到 KSP 可执行文件。请在设置里重新选择游戏根目录（里面应该有 KSP_x64.exe）。', 'GAME_EXECUTABLE_NOT_FOUND');
     }
     const child = spawn(executable, [], {
       cwd: runtime.instance.path,

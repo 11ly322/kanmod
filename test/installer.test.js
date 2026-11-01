@@ -119,3 +119,27 @@ test('安装规则为空时按压缩包内的 GameData 目录推断安装位置'
   await assert.doesNotReject(fs.access(path.join(ksp, 'GameData/BDArmory/BDArmory.dll')));
   await fs.rm(root3, { recursive: true, force: true });
 });
+
+test('没有扩展名的压缩包会按文件头识别为 zip', async () => {
+  const root4 = path.join(os.tmpdir(), 'kanmod-test-installer-sniff');
+  await fs.rm(root4, { recursive: true, force: true });
+  const ksp = path.join(root4, 'ksp');
+  const archive = path.join(root4, 'BDArmory-v0.11.0.1.archive');
+  await fs.mkdir(path.join(ksp, 'GameData'), { recursive: true });
+  await fs.mkdir(path.dirname(archive), { recursive: true });
+  await fs.writeFile(archive, createZip([
+    { name: 'GameData/BDArmory/BDArmory.dll', data: Buffer.from('bd dll') },
+  ], { compress: true }));
+
+  const result = await installArchive({
+    archivePath: archive,
+    kspPath: ksp,
+    packageInfo: { identifier: 'BDArmory', name: 'BDArmory', version: '0.11.0.1', install: [] },
+    settings: { install: { backupOverwrite: true } },
+    backupsDir: path.join(root4, 'backups'),
+  });
+
+  assert.ok(result.record.files.includes('GameData/BDArmory/BDArmory.dll'));
+  await assert.doesNotReject(fs.access(path.join(ksp, 'GameData/BDArmory/BDArmory.dll')));
+  await fs.rm(root4, { recursive: true, force: true });
+});

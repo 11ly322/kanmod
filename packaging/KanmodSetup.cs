@@ -16,11 +16,11 @@ using Kanmod.Installer;
 [assembly: AssemblyCompany("kanmod")]
 [assembly: AssemblyVersion("0.1.5.0")]
 [assembly: AssemblyFileVersion("0.1.5.0")]
-[assembly: AssemblyInformationalVersion("0.1.5-alpha")]
+[assembly: AssemblyInformationalVersion("0.1.5-beta")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.1.5-alpha";
+    internal const string AppVersion = "0.1.5-beta";
 
     [STAThread]
     private static int Main(string[] args)
@@ -327,9 +327,11 @@ internal static class Program
 
     private static void StopExistingServer(string targetDir)
     {
-        InstallerCore.StopProcessesForInstall(Log, targetDir, LegacyInstallDir());
+        // Stop the supervisor by pid first: killing the child while the supervisor is
+        // still alive would make it restart the child a moment later.
         InstallerCore.StopServerFromData(DataDirFor(targetDir), Log);
         InstallerCore.StopServerFromData(LegacyDataDir(), Log);
+        InstallerCore.StopProcessesForInstall(Log, targetDir, LegacyInstallDir());
     }
 
     private static void CreateShortcut(string linkPath, string targetPath, string workingDir)

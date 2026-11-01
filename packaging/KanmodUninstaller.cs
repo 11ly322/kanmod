@@ -11,11 +11,11 @@ using Kanmod.Installer;
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
 [assembly: System.Reflection.AssemblyVersion("0.1.5.0")]
 [assembly: System.Reflection.AssemblyFileVersion("0.1.5.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.5-alpha")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.5-beta")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.1.5-alpha";
+    private const string AppVersion = "0.1.5-beta";
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\kanmod";
 
     [STAThread]

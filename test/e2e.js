@@ -184,6 +184,23 @@ async function main() {
     const emptyBatch = await api(token, '/api/mods/batch', { method: 'POST', body: { action: 'disable', identifiers: [] } });
     check('batch empty', emptyBatch.status === 400 && emptyBatch.json?.error?.code === 'BATCH_EMPTY');
 
+    // game launch: resolve the executable against the instance folder, not the cwd
+    const demoLaunch = await api(token, '/api/game/launch', { method: 'POST', body: {} });
+    check('game launch without exe', demoLaunch.status === 409 && demoLaunch.json?.error?.code === 'GAME_EXECUTABLE_NOT_FOUND' && /设置/.test(String(demoLaunch.json?.error?.message || '')));
+
+    const fakeKsp = await fs.mkdtemp(path.join(os.tmpdir(), 'kanmod-e2e-ksp-'));
+    await fs.mkdir(path.join(fakeKsp, 'GameData'), { recursive: true });
+    await fs.copyFile(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'where.exe'), path.join(fakeKsp, 'KSP_x64.exe')).catch(() => {});
+    const detected = await api(token, '/api/instances/detect', { method: 'POST', body: { path: fakeKsp } });
+    check('instances detect accepts a KSP folder', detected.status === 200 && Array.isArray(detected.json?.instances));
+    const detectedId = (detected.json?.instances || []).find((item) => item.path === fakeKsp)?.id;
+    if (detectedId) {
+      const selected = await api(token, '/api/instances/select', { method: 'POST', body: { id: detectedId } });
+      check('instances select', selected.status === 200);
+      const launch = await api(token, '/api/game/launch', { method: 'POST', body: {} });
+      check('game launch resolves exe in instance folder', launch.status === 202 && Number.isInteger(launch.json?.pid), JSON.stringify(launch.json).slice(0, 160));
+    }
+
     // errors
     const notFound = await api(token, '/api/nope');
     check('unknown api 404', notFound.status === 404 && notFound.json?.error?.code === 'NOT_FOUND');

@@ -33,8 +33,40 @@ function nowStamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
-function archiveType(file) {
+const ARCHIVE_MAGIC = {
+  zip: [[0x50, 0x4b, 0x03, 0x04], [0x50, 0x4b, 0x05, 0x06], [0x50, 0x4b, 0x07, 0x08]],
+  gzip: [[0x1f, 0x8b]],
+  sevenZip: [[0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]],
+  rar: [[0x52, 0x61, 0x72, 0x21]],
+};
+
+async function sniffArchive(file) {
+  const handle = await fs.open(file, 'r').catch(() => null);
+  if (!handle) return null;
+  try {
+    const buffer = Buffer.alloc(8);
+    const { bytesRead } = await handle.read(buffer, 0, 8, 0);
+    const head = buffer.subarray(0, bytesRead);
+    const matches = (patterns) => patterns.some((pattern) => pattern.every((byte, index) => head[index] === byte));
+    if (matches(ARCHIVE_MAGIC.zip)) return 'zip';
+    if (matches(ARCHIVE_MAGIC.gzip)) return 'tar';
+    if (matches(ARCHIVE_MAGIC.sevenZip)) return '7z';
+    if (matches(ARCHIVE_MAGIC.rar)) return 'rar';
+    return null;
+  } finally {
+    await handle.close().catch(() => {});
+  }
+}
+
+async function archiveType(file) {
   const lower = file.toLowerCase();
+  // 先按内容判断，避免 .archive/bin 之类扩展名把真正的 zip 挡在门外。
+  const sniffed = await sniffArchive(file);
+  if (sniffed === 'zip') return 'zip';
+  if (sniffed === 'tar') return 'tar';
+  if (sniffed === '7z' || sniffed === 'rar') {
+    throw new Error('这个压缩包是 7z/rar 格式，kanmod 暂不支持。请先手动解压出 GameData，再用“本地安装”选择文件夹。');
+  }
   if (lower.endsWith('.zip')) return 'zip';
   if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) return 'tar';
   if (lower.endsWith('.ckan')) return 'json';
@@ -61,7 +93,7 @@ export async function readArchive(archivePath) {
   if (!stat) throw new Error('安装包不存在。');
   if (stat.size > MAX_EXTRACT_BYTES * 1.2) throw new Error(`安装包过大（${formatBytes(stat.size)}）。`);
   const buffer = await fs.readFile(archivePath);
-  const type = archiveType(archivePath);
+  const type = await archiveType(archivePath);
   let raw;
   if (type === 'zip') {
     raw = extractZip(buffer, { maxEntries: MAX_EXTRACT_ENTRIES, maxTotalBytes: MAX_EXTRACT_BYTES });

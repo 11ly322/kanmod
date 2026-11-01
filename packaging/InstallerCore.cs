@@ -124,6 +124,12 @@ namespace Kanmod.Installer
                         catch { }
                     }
                     try { File.Delete(file); } catch { }
+                    if (string.Equals(Path.GetFileName(file), "supervisor.json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // The supervisor restarts its child within about a second, so give
+                        // it time to disappear before the runtime child is stopped.
+                        Thread.Sleep(1000);
+                    }
                 }
                 catch { }
             }

@@ -54,6 +54,8 @@ function openEvents(req, res, context) {
   res.write('retry: 3000\n\n');
   res.write(`data: ${JSON.stringify({ type: 'hello', at: nowIso(), demo: context.demo })}\n\n`);
   context.clients.add(res);
+  clearTimeout(context.idleTimer);
+  context.idleTimer = null;
   const timer = setInterval(() => {
     try {
       res.write(`: ping ${Date.now()}\n\n`);
@@ -64,7 +66,38 @@ function openEvents(req, res, context) {
   req.on('close', () => {
     clearInterval(timer);
     context.clients.delete(res);
+    if (!context.clients.size) armIdleExit(context);
   });
+}
+
+const IDLE_EXIT_MS = Number(process.env.KANMOD_IDLE_EXIT_MS || 90_000);
+
+function hasActiveJobs(context) {
+  try {
+    return context.jobs.list().some((job) => job.status === 'running' || job.status === 'queued');
+  } catch {
+    return false;
+  }
+}
+
+// Close the server once the UI has been gone for a while, so the background node
+// process does not keep holding memory after the window is closed. Only enabled
+// when the supervisor starts us (KANMOD_AUTO_EXIT=1), never in dev or tests.
+function armIdleExit(context) {
+  if (!context.idleExit) return;
+  clearTimeout(context.idleTimer);
+  context.idleTimer = null;
+  if (context.clients.size) return;
+  context.idleTimer = setTimeout(() => {
+    context.idleTimer = null;
+    if (context.clients.size) return;
+    if (hasActiveJobs(context)) {
+      armIdleExit(context);
+      return;
+    }
+    context.onIdle?.();
+  }, IDLE_EXIT_MS);
+  context.idleTimer.unref?.();
 }
 
 async function handleApi(req, res, context, url) {
@@ -195,6 +228,9 @@ export async function createContext({ demoInfo = null } = {}) {
     uploads: new Map(),
     clients: new Set(),
     port: 0,
+    idleExit: process.env.KANMOD_AUTO_EXIT === '1',
+    idleTimer: null,
+    onIdle: null,
   };
   await setupDemo(context);
   context.jobs.on('job', (job) => broadcast(context, { type: 'job', job }));
@@ -230,6 +266,12 @@ export async function startServer({ demoInfo = null, port = 0, host = '127.0.0.1
   context.baseUrl = `http://127.0.0.1:${context.port}`;
   context.launchUrl = `${context.baseUrl}/?token=${encodeURIComponent(context.token)}`;
   context.startedAt = nowIso();
+  context.onIdle = () => {
+    console.log('[kanmod] 浏览器窗口已关闭，后台服务自动退出。');
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 1500).unref();
+  };
+  armIdleExit(context);
   if (open && context.configStore.get().ui.openBrowser) {
     await openAppWindow(context.launchUrl).catch(() => {});
   }
