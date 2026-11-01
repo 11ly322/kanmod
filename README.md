@@ -4,7 +4,7 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.0.72-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.1.0-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -33,7 +33,7 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.72.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.1.0.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
 默认安装位置  第一个非 C 盘的 \Programs\kanmod（可在安装器里修改）
@@ -116,14 +116,21 @@ https://github.com/KSP-CKAN/CKAN-meta/archive/refs/heads/master.tar.gz
 
 ```powershell
 npm test          # 24 项单元测试
+npm run test:e2e  # 48 项 HTTP 端到端测试（演示实例）
 npm run check     # 语法检查
 ```
 
 项目结构：
 
 ```text
-bin/kanmod.js        源码启动器
-server.js            本地 HTTP API、认证、SSE、静态 UI
+bin/kanmod.js        源码启动器与守护进程
+server.js            薄门面：再导出本地服务
+src/server/app.js    服务组装：路由分发、认证、SSE、静态 UI
+src/server/http.js   HTTP 基础：请求体、Cookie、错误、静态文件
+src/server/router.js 轻量路由表（字符串 / 正则匹配）
+src/server/routes/api.js 全部 API 路由处理器
+src/server/services.js   领域服务：实例、安装、诊断、翻译、缓存
+src/version.js       版本单一来源
 src/ksp/             KSP 检测、版本、GameData 扫描
 src/catalog/         .ckan 规范化、索引加载、依赖解析、下载源
 src/installer.js     安装/卸载/回滚
@@ -132,9 +139,13 @@ src/translate.js     翻译与缓存
 src/tagTranslations.js 标签中文词典
 src/curseforge.js    CurseForge 只读检索与详情映射
 src/downloads.js     多源下载
-public/              原生 ES module SPA（无构建步骤）
-packaging/           Windows EXE 启动器与安装器（C#，无第三方依赖）
-test/                Node 内置测试
+public/app.js        SPA 外壳：渲染、启动、事件绑定
+public/js/core.js    状态、API 客户端、通用组件
+public/js/views.js   视图渲染
+public/js/actions.js 数据加载与交互动作
+public/styles.css    全部样式（白底红点缀）
+packaging/           Windows EXE 启动器、安装器与安装核心（C#，无第三方依赖）
+test/                Node 内置测试（单元 + 端到端）
 ```
 
 ## 构建 Windows 安装器
@@ -145,7 +156,7 @@ test/                Node 内置测试
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.0.72.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
+产物位于 `.artifacts/build/kanmod-setup-0.1.0.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
 
 ## 已知限制
 

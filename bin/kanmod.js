@@ -16,7 +16,7 @@ function option(name, fallback = null) {
 }
 
 if (hasFlag('--help') || hasFlag('-h')) {
-  console.log(`kanmod 0.0.72 — 坎巴拉太空计划 1 模组管理器
+  console.log(`kanmod 0.1.0 — 坎巴拉太空计划 1 模组管理器
 
 用法:
   node bin/kanmod.js                 启动并打开 kanmod
@@ -30,7 +30,7 @@ if (hasFlag('--help') || hasFlag('-h')) {
 }
 
 if (hasFlag('--version') || hasFlag('-v')) {
-  console.log('kanmod 0.0.72');
+  console.log('kanmod 0.1.0');
   process.exit(0);
 }
 
@@ -83,7 +83,7 @@ try {
     pid: process.pid,
     port: context.port,
     url,
-    version: '0.0.72',
+    version: '0.1.0',
     appRoot: APP_ROOT,
     startedAt: new Date().toISOString(),
   }, null, 2), 'utf8');
