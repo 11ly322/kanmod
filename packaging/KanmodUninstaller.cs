@@ -9,13 +9,13 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("kanmod")]
 [assembly: System.Reflection.AssemblyDescription("kanmod uninstaller")]
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
-[assembly: System.Reflection.AssemblyVersion("0.0.4.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.0.4.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.0.4")]
+[assembly: System.Reflection.AssemblyVersion("0.0.5.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.0.5.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.0.5")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.0.4";
+    private const string AppVersion = "0.0.5";
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\kanmod";
 
     [STAThread]
@@ -47,6 +47,7 @@ internal static class Program
 
         try
         {
+            StopInstallNodes(installDir);
             StopServer(Path.Combine(installDir, "data"));
             StopLauncher(installDir);
             RemoveRegistry();
@@ -66,6 +67,28 @@ internal static class Program
         foreach (string arg in args)
             if (string.Equals(arg, name, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    private static void StopInstallNodes(string installDir)
+    {
+        try
+        {
+            string prefix = Path.GetFullPath(installDir).TrimEnd('\\') + "\\";
+            foreach (Process process in Process.GetProcessesByName("node"))
+            {
+                try
+                {
+                    string path = process.MainModule.FileName;
+                    if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill();
+                        process.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
     }
 
     private static void StopServer(string dataDir)

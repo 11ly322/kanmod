@@ -31,7 +31,7 @@ import { safeFileName } from './src/util/paths.js';
 import { normalizeIdentifier } from './src/util/version.js';
 
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
-const APP_VERSION = '0.0.4';
+const APP_VERSION = '0.0.5';
 const MAX_JSON_BODY = 4 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const COOKIE_NAME = 'kanmod_token';
@@ -400,6 +400,43 @@ function findInstalledEntry(runtime, identifier) {
 function isStockEntry(entry) {
   return /^(Squad|SquadExpansion)$/i.test(String(entry?.folder || ''))
     || /^Squad/i.test(String(entry?.identifier || ''));
+}
+
+async function disableInstalledMod(context, runtime, entry) {
+  const store = await getDisabledStore(context, runtime.instance.id);
+  const result = await disableMod({
+    kspPath: runtime.info.path,
+    entry,
+    store,
+    registry: runtime.registry,
+  });
+  return result.manifest;
+}
+
+async function enableDisabledMod(context, runtime, manifest) {
+  const store = await getDisabledStore(context, runtime.instance.id);
+  return enableMod({
+    kspPath: runtime.info.path,
+    manifest,
+    store,
+    registry: runtime.registry,
+  });
+}
+
+async function deleteInstalledMod(context, runtime, { entry, manifest }) {
+  const store = await getDisabledStore(context, runtime.instance.id);
+  const trashDir = path.join(DATA_DIR, 'trash', runtime.instance.id);
+  const result = await removeModPath({
+    kspPath: runtime.info.path,
+    entry,
+    manifest,
+    trashDir,
+  });
+  if (manifest) await store.remove(manifest.key);
+  const record = runtime.registry.getByIdentifier(manifest?.identifier || entry?.identifier)
+    || (entry?.folder ? runtime.registry.getByFolder(entry.folder) : null);
+  if (record) await runtime.registry.remove(record.id);
+  return result;
 }
 
 
@@ -1140,15 +1177,9 @@ async function handleApi(req, res, context, url) {
     const entry = findInstalledEntry(runtime, body.identifier || body.id || body.folder);
     if (!entry) throw new HttpError(404, '没有找到这个已安装模组。', 'MOD_NOT_FOUND');
     if (isStockEntry(entry)) throw new HttpError(403, '原版游戏组件不能禁用。', 'STOCK_MOD');
-    const store = await getDisabledStore(context, runtime.instance.id);
-    const result = await disableMod({
-      kspPath: runtime.info.path,
-      entry,
-      store,
-      registry: runtime.registry,
-    });
+    const manifest = await disableInstalledMod(context, runtime, entry);
     invalidateScan(context, runtime.instance.id);
-    return sendJson(res, 200, { ok: true, disabled: result.manifest });
+    return sendJson(res, 200, { ok: true, disabled: manifest });
   }
 
   if (method === 'POST' && pathname === '/api/mods/enable') {
@@ -1158,12 +1189,7 @@ async function handleApi(req, res, context, url) {
     const manifest = store.find({ identifier: body.identifier, folder: body.folder, id: body.id })
       || store.get(lower(body.key));
     if (!manifest) throw new HttpError(404, '没有找到这个已禁用模组。', 'DISABLED_NOT_FOUND');
-    const result = await enableMod({
-      kspPath: runtime.info.path,
-      manifest,
-      store,
-      registry: runtime.registry,
-    });
+    const result = await enableDisabledMod(context, runtime, manifest);
     invalidateScan(context, runtime.instance.id);
     return sendJson(res, 200, { ok: true, enabled: result });
   }
@@ -1177,17 +1203,7 @@ async function handleApi(req, res, context, url) {
     const entry = manifest ? null : findInstalledEntry(runtime, body.identifier || body.id || body.folder);
     if (!manifest && !entry) throw new HttpError(404, '没有找到这个模组。', 'MOD_NOT_FOUND');
     if (entry && isStockEntry(entry)) throw new HttpError(403, '原版游戏组件不能删除。', 'STOCK_MOD');
-    const trashDir = path.join(DATA_DIR, 'trash', runtime.instance.id);
-    const result = await removeModPath({
-      kspPath: runtime.info.path,
-      entry,
-      manifest,
-      trashDir,
-    });
-    if (manifest) await store.remove(manifest.key);
-    const record = runtime.registry.getByIdentifier(manifest?.identifier || entry?.identifier)
-      || (entry?.folder ? runtime.registry.getByFolder(entry.folder) : null);
-    if (record) await runtime.registry.remove(record.id);
+    const result = await deleteInstalledMod(context, runtime, { entry, manifest });
     invalidateScan(context, runtime.instance.id);
     return sendJson(res, 200, {
       ok: true,
@@ -1203,15 +1219,24 @@ async function handleApi(req, res, context, url) {
     const runtime = await getRuntime(context);
     const result = await installedFor(context, runtime);
     const wanted = lower(body.identifier || body.id || '');
-    const updates = wanted
-      ? result.updates.filter((item) => lower(item.identifier) === wanted)
-      : result.updates;
+    const wantedList = Array.isArray(body.identifiers)
+      ? body.identifiers.map((item) => lower(item)).filter(Boolean)
+      : [];
+    const updates = wantedList.length
+      ? result.updates.filter((item) => wantedList.includes(lower(item.identifier)))
+      : wanted
+        ? result.updates.filter((item) => lower(item.identifier) === wanted)
+        : result.updates;
     if (!updates.length) {
       return sendJson(res, 200, {
         ok: true,
         job: null,
         updates: [],
-        message: wanted ? '这个模组已经是最新版本。' : '所有已安装模组都是最新版本。',
+        message: wantedList.length
+          ? '选中的模组没有可用更新。'
+          : wanted
+            ? '这个模组已经是最新版本。'
+            : '所有已安装模组都是最新版本。',
       });
     }
     const roots = updates.map((item) => ({ identifier: item.identifier, version: item.latestVersion }));
@@ -1227,11 +1252,70 @@ async function handleApi(req, res, context, url) {
         updates,
       });
     }
+    const title = updates.length === 1
+      ? `更新 ${updates[0].name || updates[0].identifier}`
+      : `批量更新 ${updates.length} 个模组`;
     const job = await enqueueInstall(context, plan, {
-      title: wanted ? `更新 ${updates[0].name || updates[0].identifier}` : `一键更新 ${updates.length} 个模组`,
+      title,
       meta: { updates, kind: 'update' },
     });
     return sendJson(res, 202, { ok: true, job, plan, updates });
+  }
+
+  if (method === 'POST' && pathname === '/api/mods/batch') {
+    const body = await readJsonBody(req);
+    const action = String(body.action || '');
+    const identifiers = Array.isArray(body.identifiers)
+      ? [...new Set(body.identifiers.map((item) => String(item || '').trim()).filter(Boolean))]
+      : [];
+    if (!['disable', 'enable', 'delete'].includes(action)) {
+      throw new HttpError(400, '批量操作类型无效。', 'BATCH_ACTION_INVALID');
+    }
+    if (!identifiers.length) throw new HttpError(400, '请先选择模组。', 'BATCH_EMPTY');
+    if (identifiers.length > 200) throw new HttpError(400, '一次最多处理 200 个模组。', 'BATCH_TOO_LARGE');
+    const runtime = await getRuntime(context);
+    const store = await getDisabledStore(context, runtime.instance.id);
+    const results = [];
+    for (const raw of identifiers) {
+      const identifier = lower(raw);
+      try {
+        if (action === 'disable') {
+          const entry = findInstalledEntry(runtime, identifier);
+          if (!entry) throw new HttpError(404, '没有找到这个已安装模组。', 'MOD_NOT_FOUND');
+          if (isStockEntry(entry)) throw new HttpError(403, '原版游戏组件不能禁用。', 'STOCK_MOD');
+          const manifest = await disableInstalledMod(context, runtime, entry);
+          results.push({ identifier, name: entry.name || entry.folder, ok: true, key: manifest.key });
+        } else if (action === 'enable') {
+          const manifest = store.find({ identifier, id: identifier });
+          if (!manifest) throw new HttpError(404, '没有找到这个已禁用模组。', 'DISABLED_NOT_FOUND');
+          const enabled = await enableDisabledMod(context, runtime, manifest);
+          results.push({ identifier, name: manifest.name, ok: true, relPath: enabled.relPath });
+        } else {
+          const manifest = store.find({ identifier, id: identifier });
+          const entry = manifest ? null : findInstalledEntry(runtime, identifier);
+          if (!manifest && !entry) throw new HttpError(404, '没有找到这个模组。', 'MOD_NOT_FOUND');
+          if (entry && isStockEntry(entry)) throw new HttpError(403, '原版游戏组件不能删除。', 'STOCK_MOD');
+          const removed = await deleteInstalledMod(context, runtime, { entry, manifest });
+          results.push({ identifier, name: manifest?.name || entry?.name || entry?.folder, ok: true, moved: removed.moved });
+        }
+      } catch (error) {
+        results.push({
+          identifier,
+          ok: false,
+          error: error.message || '操作失败',
+          code: error.code || 'BATCH_ITEM_FAILED',
+        });
+      }
+    }
+    invalidateScan(context, runtime.instance.id);
+    const succeeded = results.filter((item) => item.ok).length;
+    return sendJson(res, 200, {
+      ok: succeeded > 0,
+      action,
+      results,
+      succeeded,
+      failed: results.length - succeeded,
+    });
   }
 
   if (method === 'POST' && pathname === '/api/uninstall') {

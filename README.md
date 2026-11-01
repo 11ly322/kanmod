@@ -4,7 +4,7 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.0.4-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.0.5-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -13,7 +13,7 @@
 - **依赖解析与前置安装**：递归解析硬依赖、版本范围、虚拟 provides，生成安装顺序，只选择兼容版本。
 - **多下载源回退**：CKAN 直链 → 镜像前缀 → GitHub Releases → SpaceDock；失败时保留每次尝试记录。下载支持 SHA256 校验。
 - **安全安装**：按 CKAN `install` 规则落到 GameData / Ships / Missions 等位置；覆盖前备份；写盘失败回滚；卸载移动到回收站。
-- **模组管理**：禁用（移动到 `KSP/DisabledMods`，不会继续被加载）、启用、删除到回收站、一键更新可更新模组；不会直接删除游戏文件。
+- **模组管理**：禁用（移动到 `KSP/DisabledMods`，不会继续被加载）、启用、删除到回收站；快捷更新管理器可勾选或全部更新，已安装页支持批量禁用/启用/删除；不会直接删除游戏文件。
 - **问题诊断**：检查缺失前置、版本约束、冲突、KSP 兼容性、重复 DLL、安装记录漂移，并读取 `KSP.log` / `output_log.txt` / `Player.log` 的异常。自动修复只处理安全的依赖安装/兼容更新，冲突移除必须确认。
 - **模组关联**：依赖图、被依赖、推荐、冲突，以及模组简介页的一键跳转。
 - **中文翻译**：打开英文模组简介时自动翻译简介；完整说明可手动翻译。支持 Google / MyMemory 在线翻译、本地缓存和演示内置翻译。机器翻译仅供参考。
@@ -28,7 +28,7 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.4.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.5.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
 默认安装位置  第一个非 C 盘的 \Programs\kanmod（可在安装器里修改）
@@ -107,7 +107,7 @@ https://github.com/KSP-CKAN/CKAN-meta/archive/refs/heads/master.tar.gz
 ## 开发
 
 ```powershell
-npm test          # 12 项单元测试
+npm test          # 15 项单元测试
 npm run check     # 语法检查
 ```
 
@@ -135,15 +135,15 @@ test/                Node 内置测试
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.0.4.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
+产物位于 `.artifacts/build/kanmod-setup-0.0.5.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
 
 ## 已知限制
 
 - 安装器未做代码签名，Windows SmartScreen 可能提示“未知发布者”；请核对下载来源为本仓库 Releases。
 - 当前版本只实现 KSP 1；KSP 2 的目录与元数据格式不同。
+- 已用真实 KSP 1.12.5 实例做过只读扫描验证；未在真实游戏内执行禁用、更新或删除，建议首次操作前保留 `GameData` 备份。
 - CurseForge 需要 API Key，配置项已保留，但尚未接入其下载 API。
 - 在线翻译依赖第三方公开端点，可能限流或不可用；失败会在界面显示并允许重试。
-- 无法在本仓库的离线构建环境中验证真实 KSP 安装；安装、卸载、诊断链路通过内置演示环境与单元测试验证。
 
 ## 许可
 

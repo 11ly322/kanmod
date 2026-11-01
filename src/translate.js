@@ -120,7 +120,7 @@ async function requestGoogle(text, { fetchImpl, timeoutMs }) {
   url.searchParams.set('dt', 't');
   url.searchParams.set('q', text);
   const response = await fetchImpl(url, {
-    headers: { 'User-Agent': 'kanmod/0.0.4', Accept: 'application/json' },
+    headers: { 'User-Agent': 'kanmod/0.0.5', Accept: 'application/json' },
     signal: timeoutSignal(timeoutMs),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -166,7 +166,7 @@ async function requestMyMemory(text, { fetchImpl, timeoutMs }) {
     url.searchParams.set('q', chunk);
     url.searchParams.set('langpair', 'en|zh-CN');
     const response = await fetchImpl(url, {
-      headers: { 'User-Agent': 'kanmod/0.0.4', Accept: 'application/json' },
+      headers: { 'User-Agent': 'kanmod/0.0.5', Accept: 'application/json' },
       signal: timeoutSignal(timeoutMs),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

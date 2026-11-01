@@ -15,13 +15,13 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.4.0")]
-[assembly: AssemblyFileVersion("0.0.4.0")]
-[assembly: AssemblyInformationalVersion("0.0.4")]
+[assembly: AssemblyVersion("0.0.5.0")]
+[assembly: AssemblyFileVersion("0.0.5.0")]
+[assembly: AssemblyInformationalVersion("0.0.5")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.0.4";
+    internal const string AppVersion = "0.0.5";
 
     [STAThread]
     private static int Main(string[] args)
@@ -258,11 +258,57 @@ internal static class Program
 
     private static void StopExistingServer(string targetDir)
     {
+        StopInstallNodes(targetDir);
+        StopInstallNodes(LegacyInstallDir());
+        StopKanmodFolderNodes();
         StopDataDir(DataDirFor(targetDir));
         StopDataDir(LegacyDataDir());
         StopLauncher(targetDir);
         StopLauncher(LegacyInstallDir());
         Thread.Sleep(300);
+    }
+
+    private static void StopInstallNodes(string installDir)
+    {
+        try
+        {
+            string prefix = Path.GetFullPath(installDir).TrimEnd('\\') + "\\";
+            foreach (Process process in Process.GetProcessesByName("node"))
+            {
+                try
+                {
+                    string path = process.MainModule.FileName;
+                    if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill();
+                        process.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
+
+    private static void StopKanmodFolderNodes()
+    {
+        try
+        {
+            foreach (Process process in Process.GetProcessesByName("node"))
+            {
+                try
+                {
+                    string dir = Path.GetDirectoryName(process.MainModule.FileName);
+                    if (dir != null && string.Equals(Path.GetFileName(dir), "kanmod", StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill();
+                        process.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
     }
 
     private static void StopDataDir(string dataDir)

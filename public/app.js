@@ -13,6 +13,7 @@ const state = {
   },
   installed: null,
   installedLoading: false,
+  batchMode: false,
   diagnostics: null,
   diagnosticsLoading: false,
   diagnosticsError: null,
@@ -380,7 +381,7 @@ function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.0.4')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.0.5')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -665,12 +666,15 @@ function issueFixButton(issue) {
   return '';
 }
 
-function installedTable(entries, { compact = false } = {}) {
+function installedTable(entries, { compact = false, batchMode = false } = {}) {
   return `<div class="table-wrap" style="${compact ? 'box-shadow:none;border:0' : ''}">
     <table>
-      <thead><tr><th>模组</th><th>版本</th><th>适用 KSP</th><th>管理</th>${compact ? '' : '<th>大小</th>'}<th class="right">操作</th></tr></thead>
-      <tbody>${entries.map((entry) => `
+      <thead><tr>${batchMode ? '<th class="check-cell"><span class="sr-only">选择</span></th>' : ''}<th>模组</th><th>版本</th><th>适用 KSP</th><th>管理</th>${compact ? '' : '<th>大小</th>'}<th class="right">操作</th></tr></thead>
+      <tbody>${entries.map((entry) => {
+        const key = entry.identifier || entry.folder || entry.name || '';
+        return `
         <tr class="${entry.disabled ? 'row-disabled' : ''}">
+          ${batchMode ? `<td class="check-cell"><input class="row-select" type="checkbox" value="${esc(key)}" aria-label="选择 ${esc(entry.name || entry.folder || key)}"></td>` : ''}
           <td><div class="table-mod"><span class="mini-avatar">${initial(entry.name)}</span><div><strong>${esc(entry.name || entry.folder)}</strong><small>${esc(entry.identifier || entry.folder || '')}${entry.disabled ? ' · 已禁用' : ''}</small></div></div></td>
           <td class="mono">${esc(entry.installedVersion || '—')}${entry.updateAvailable ? `<small class="update-hint">→ ${esc(entry.latestVersion)}</small>` : ''}</td>
           <td>${entry.kspVersion ? `<span class="badge">KSP ${esc(entry.kspVersion)}</span>` : '<span class="text-muted">未声明</span>'}</td>
@@ -684,7 +688,8 @@ function installedTable(entries, { compact = false } = {}) {
               : `<button class="btn ghost sm" type="button" data-action="disable-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('pause', 13)}禁用</button>`}
             <button class="btn danger sm" type="button" data-action="delete-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('trash', 13)}删除</button>
           </div></td>
-        </tr>`).join('')}
+        </tr>`;
+      }).join('')}
       </tbody>
     </table>
   </div>`;
@@ -785,16 +790,26 @@ function installedHtml() {
     <div class="page-head">
       <div><h2>已安装模组</h2><p>扫描到 ${fmtNumber(entries.length)} 个模组条目${disabled.length ? `，其中 ${disabled.length} 个已禁用` : ''}。禁用会把整个模组移出 GameData；删除会先移入回收站。</p></div>
       <div class="head-aside">
-        ${updates.length ? `<button class="btn primary" type="button" data-action="update-all">${icon('refresh', 15)}一键更新 ${updates.length} 项</button>` : ''}
+        ${updates.length ? `<button class="btn primary" type="button" data-action="open-updates">${icon('refresh', 15)}快捷更新 ${updates.length}</button>` : ''}
+        <button class="btn ${state.batchMode ? 'soft' : 'ghost'}" type="button" data-action="toggle-batch">${icon('check', 15)}${state.batchMode ? '退出批量' : '批量管理'}</button>
         <button class="btn ghost" type="button" data-action="open-folder" data-target="gamedata">${icon('folder', 15)}GameData</button>
         <button class="btn ghost" type="button" data-action="refresh-scan">${icon('refresh', 15)}重新扫描</button>
       </div>
     </div>
+    ${state.batchMode ? `<div class="batch-bar" id="batch-bar">
+      <label class="batch-check"><input type="checkbox" id="batch-all">全选</label>
+      <span class="batch-count" id="batch-count">0 项已选</span>
+      <div class="batch-actions">
+        <button class="btn ghost sm" type="button" data-action="batch-disable">${icon('pause', 14)}禁用</button>
+        <button class="btn ghost sm" type="button" data-action="batch-enable">${icon('play', 14)}启用</button>
+        <button class="btn danger sm" type="button" data-action="batch-delete">${icon('trash', 14)}删除</button>
+      </div>
+    </div>` : ''}
     ${disabled.length ? `<div class="notice">${icon('pause', 18)}<div><strong>${disabled.length} 个模组已禁用。</strong> 文件保存在 KSP/DisabledMods，不会进入游戏；点“启用”可原位恢复。</div></div>` : ''}
     ${broken.length ? `<div class="notice warn">${icon('alert', 18)}<div><strong>有 ${broken.length} 条安装记录在磁盘上找不到对应目录。</strong> 可能是手动删除或安装未完成。到问题诊断运行一次检查。</div></div>` : ''}
     ${scan?.duplicates?.length ? `<div class="notice red">${icon('alert', 18)}<div><strong>发现 ${scan.duplicates.length} 组重复 DLL。</strong> 重复程序集可能导致启动报错，请到问题诊断查看。</div></div>` : ''}
     <div class="card" style="margin-top:14px">
-      ${entries.length ? installedTable(entries) : `<div class="empty"><div class="empty-icon">${icon('layers')}</div><strong>GameData 里还没有模组</strong><p>安装第一个模组后，它会出现在这里。</p><button class="btn primary" type="button" data-action="navigate" data-view="library">浏览模组库</button></div>`}
+      ${entries.length ? installedTable(entries, { batchMode: state.batchMode }) : `<div class="empty"><div class="empty-icon">${icon('layers')}</div><strong>GameData 里还没有模组</strong><p>安装第一个模组后，它会出现在这里。</p><button class="btn primary" type="button" data-action="navigate" data-view="library">浏览模组库</button></div>`}
     </div>`;
 }
 
@@ -1312,7 +1327,7 @@ function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.0.4')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.0.5')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1629,20 +1644,105 @@ function updateAllMods() {
     toast('当前没有可更新的模组');
     return;
   }
+  runUpdate(updates.map((item) => item.identifier));
+}
+
+function updateSelectedMods() {
+  const ids = [...document.querySelectorAll('#update-manager .update-select:checked')]
+    .map((input) => input.value)
+    .filter(Boolean);
+  if (!ids.length) {
+    toast('请先选择要更新的模组', 'warn');
+    return;
+  }
+  runUpdate(ids);
+}
+
+async function runUpdate(identifiers) {
+  const button = document.querySelector('[data-action="update-selected"], [data-action="update-all"]');
+  setBusy(button, true, '准备更新…');
+  try {
+    const data = await api('/api/mods/update', { method: 'POST', body: { identifiers } });
+    closeModal();
+    if (!data.job) {
+      toast(data.message || '选中的模组已经是最新版本');
+      await loadInstalled();
+      return;
+    }
+    upsertJob(data.job);
+    navigate('jobs');
+    toast(`更新任务已开始（${data.updates?.length || identifiers.length} 个模组）`);
+  } catch (error) {
+    toast(error.message, 'error');
+    setBusy(button, false);
+  }
+}
+
+function openUpdateManager() {
+  const updates = state.installed?.updates || [];
+  if (!updates.length) {
+    toast('当前没有可更新的模组');
+    return;
+  }
+  const rows = updates.map((item) => {
+    const compatible = item.latestCompatibility;
+    return `<label class="update-item">
+      <input class="update-select" type="checkbox" value="${esc(item.identifier)}" checked>
+      <span class="update-copy"><strong>${esc(item.name || item.identifier)}</strong><small>${esc(item.identifier)} · ${esc(item.installedVersion || item.version || '—')} → ${esc(item.latestVersion)}</small></span>
+      <span class="update-target">${esc(item.latestVersion)}</span>
+      ${compatible ? compatibilityBadge(compatible) : '<span class="badge">兼容</span>'}
+    </label>`;
+  }).join('');
+  setModalContent(`<div class="modal-head"><div><h2>快捷更新管理器</h2><p>选择要更新的模组；前置依赖会按顺序一起处理，不兼容或有冲突的项目会先经过计划检查。</p></div><button class="btn icon ghost" type="button" data-action="close-modal" aria-label="关闭">${icon('x')}</button></div>
+    <div class="modal-body" id="update-manager">
+      <div class="update-manager-toolbar"><span>${fmtNumber(updates.length)} 个模组有可用更新</span><button class="btn ghost sm" type="button" data-action="update-all">全部更新</button></div>
+      <div class="update-manager-list">${rows}</div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" type="button" data-action="close-modal">取消</button><button class="btn primary" type="button" data-action="update-selected">${icon('refresh', 14)}更新选中</button></div>`);
+}
+
+function toggleBatch() {
+  state.batchMode = !state.batchMode;
+  renderView();
+  if (state.batchMode) syncBatchSelection();
+}
+
+function syncBatchSelection() {
+  const boxes = [...document.querySelectorAll('.row-select')];
+  const checked = boxes.filter((input) => input.checked);
+  const count = document.getElementById('batch-count');
+  const all = document.getElementById('batch-all');
+  if (count) count.textContent = `${checked.length} 项已选`;
+  if (all) {
+    all.checked = boxes.length > 0 && checked.length === boxes.length;
+    all.indeterminate = checked.length > 0 && checked.length < boxes.length;
+  }
+}
+
+async function batchAction(action) {
+  const ids = [...document.querySelectorAll('.row-select:checked')].map((input) => input.value);
+  if (!ids.length) {
+    toast('请先勾选要处理的模组', 'warn');
+    return;
+  }
+  const meta = {
+    disable: { title: `批量禁用 ${ids.length} 个模组`, text: '这些模组会整体移入 KSP/DisabledMods，不会进入游戏，也不会删除文件。', confirm: '全部禁用' },
+    enable: { title: `批量启用 ${ids.length} 个模组`, text: '这些模组会从 KSP/DisabledMods 移回 GameData 原位置；若原位置已有同名文件，该项会跳过。', confirm: '全部启用' },
+    delete: { title: `批量删除 ${ids.length} 个模组`, text: '这些模组会移入 kanmod 回收站，不会直接擦除。原版组件会自动跳过。', confirm: '移到回收站' },
+  }[action];
+  if (!meta) return;
   confirmAction({
-    title: `一键更新 ${updates.length} 个模组`,
-    message: `将按依赖顺序更新：${updates.map((item) => item.name || item.identifier).join('、')}。版本不兼容或有冲突的模组会自动跳过，不会强行升级。`,
-    confirmText: '开始更新',
+    title: meta.title,
+    message: meta.text,
+    confirmText: meta.confirm,
     onConfirm: async () => {
-      const data = await api('/api/mods/update', { method: 'POST', body: {} });
-      if (!data.job) {
-        toast(data.message || '没有可执行的更新');
-        return;
+      const data = await api('/api/mods/batch', { method: 'POST', body: { action, identifiers: ids } });
+      state.batchMode = false;
+      await afterModChange(`批量操作完成：成功 ${data.succeeded || 0}，跳过 ${data.failed || 0}`);
+      if (data.failed) {
+        const first = (data.results || []).find((item) => !item.ok);
+        toast(`${data.failed} 项未处理${first ? `：${first.error}` : ''}`, 'warn');
       }
-      upsertJob(data.job);
-      state.view = 'jobs';
-      renderApp();
-      toast('更新任务已开始');
     },
   });
 }
@@ -2490,8 +2590,26 @@ function setupEvents() {
         case 'update-mod':
           await updateManagedMod(actionNode.dataset.id);
           break;
+        case 'open-updates':
+          openUpdateManager();
+          break;
+        case 'update-selected':
+          updateSelectedMods();
+          break;
         case 'update-all':
           updateAllMods();
+          break;
+        case 'toggle-batch':
+          toggleBatch();
+          break;
+        case 'batch-disable':
+          batchAction('disable');
+          break;
+        case 'batch-enable':
+          batchAction('enable');
+          break;
+        case 'batch-delete':
+          batchAction('delete');
           break;
         case 'open-folder':
           await openFolder(actionNode.dataset.target);
@@ -2594,7 +2712,12 @@ function setupEvents() {
   });
 
   document.addEventListener('change', async (event) => {
-    if (event.target.id === 'library-sort') {
+    if (event.target.id === 'batch-all') {
+      document.querySelectorAll('.row-select').forEach((input) => { input.checked = event.target.checked; });
+      syncBatchSelection();
+    } else if (event.target.classList?.contains('row-select')) {
+      syncBatchSelection();
+    } else if (event.target.id === 'library-sort') {
       state.library.sort = event.target.value;
       state.library.page = 1;
       renderApp();
