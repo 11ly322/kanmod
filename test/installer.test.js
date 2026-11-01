@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { createZip } from '../src/util/zip.js';
 import { installArchive, uninstallRecord } from '../src/installer.js';
 
-const root = path.resolve('.artifacts/test-installer');
+const root = path.join(os.tmpdir(), 'kanmod-test-installer');
 
 test('installArchive 写入 GameData 并可安全卸载到回收站', async () => {
   await fs.rm(root, { recursive: true, force: true });

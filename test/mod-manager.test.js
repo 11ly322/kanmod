@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import {
   DisabledStore,
   computeUpdates,
@@ -10,7 +11,7 @@ import {
   removeModPath,
 } from '../src/modManager.js';
 
-const root = path.resolve('.artifacts/test-mod-manager');
+const root = path.join(os.tmpdir(), 'kanmod-test-mod-manager');
 
 function registryStub() {
   let saved = null;
