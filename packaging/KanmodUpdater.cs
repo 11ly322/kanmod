@@ -13,9 +13,9 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyTitle("kanmod updater")]
 [assembly: System.Reflection.AssemblyProduct("kanmod")]
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
-[assembly: System.Reflection.AssemblyVersion("0.1.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.2.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.2")]
+[assembly: System.Reflection.AssemblyVersion("0.1.3.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.3.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.3")]
 
 internal static class Program
 {
@@ -72,7 +72,7 @@ internal static class Program
         }
 
         var request = (HttpWebRequest)WebRequest.Create(release.AssetUrl);
-        request.UserAgent = "kanmod-updater/0.1.2";
+        request.UserAgent = "kanmod-updater/0.1.3";
         request.Proxy = null;
         request.Timeout = 30000;
         using (var response = (HttpWebResponse)request.GetResponse())
@@ -192,7 +192,7 @@ internal sealed class ReleaseInfo
     private static string Get(string url)
     {
         var request = (HttpWebRequest)WebRequest.Create(url);
-        request.UserAgent = "kanmod-updater/0.1.2";
+        request.UserAgent = "kanmod-updater/0.1.3";
         request.Accept = "application/vnd.github+json";
         request.Proxy = null;
         request.Timeout = 15000;

@@ -4,23 +4,47 @@
  * fourth component ("1.12.5.3190") that must not affect mod compatibility.
  */
 
-const VERSION_RE = /^(\d+(?:\.\d+)*)(?:-([0-9A-Za-z][0-9A-Za-z.-]*))?(?:\+[0-9A-Za-z.-]+)?$/;
+const NUMERIC_RE = /^(\d+(?:\.\d+)*)/;
 
+/**
+ * Parses the loose version strings found in CKAN indexes: `1.2`, `v1.2.3`,
+ * `1:1.4.0` (epoch), `1.3.5_beta`, `1.2.2.2a`, `1.01_RC`, `0.0.4d`. The epoch
+ * is kept separately because CKAN sorts by epoch before the numeric parts.
+ */
 export function parseVersion(input) {
   const raw = String(input ?? '').trim();
-  const withoutEpoch = raw.includes(':') ? raw.slice(raw.indexOf(':') + 1) : raw;
-  const normalized = withoutEpoch.replace(/^v/i, '');
-  const match = normalized.match(VERSION_RE);
-  if (!match) {
-    return { raw, numbers: [], prerelease: [], valid: false, base: '' };
+  let rest = raw;
+  let epoch = 0;
+  const epochMatch = rest.match(/^(\d+):/);
+  if (epochMatch) {
+    epoch = Number.parseInt(epochMatch[1], 10);
+    rest = rest.slice(epochMatch[0].length);
   }
-  const numbers = match[1].split('.').map((part) => Number.parseInt(part, 10));
-  const prerelease = match[2] ? match[2].split('.') : [];
+  rest = rest.replace(/^[vV]/, '');
+
+  let numbers = [];
+  let suffix = '';
+  const numeric = rest.match(NUMERIC_RE);
+  if (numeric) {
+    numbers = numeric[1].split('.').map((part) => Number.parseInt(part, 10));
+    suffix = rest.slice(numeric[0].length);
+  } else {
+    // Some releases start with a name ("alpha_0.0.4d", "A.02f"); keep the
+    // embedded numbers and treat the left-over words as a prerelease tag.
+    const embedded = rest.match(/(\d+(?:\.\d+)*)/);
+    if (!embedded) {
+      return { raw, epoch, numbers: [], prerelease: [], valid: false, base: '' };
+    }
+    numbers = embedded[1].split('.').map((part) => Number.parseInt(part, 10));
+    suffix = `${rest.slice(0, embedded.index)} ${rest.slice(embedded.index + embedded[0].length)}`;
+  }
+  const prerelease = suffix.split(/[^0-9A-Za-z]+/).filter(Boolean);
   return {
     raw,
+    epoch,
     numbers,
     prerelease,
-    valid: true,
+    valid: numbers.length > 0,
     base: numbers.join('.'),
   };
 }
@@ -58,6 +82,9 @@ export function compareVersions(leftInput, rightInput) {
   }
   if (!left.valid) return -1;
   if (!right.valid) return 1;
+
+  const epochDiff = (left.epoch || 0) - (right.epoch || 0);
+  if (epochDiff !== 0) return epochDiff > 0 ? 1 : -1;
 
   const length = Math.max(left.numbers.length, right.numbers.length);
   for (let index = 0; index < length; index += 1) {

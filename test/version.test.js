@@ -2,10 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseKspVersion,
+  parseVersion,
   compareVersions,
   checkKspCompatibility,
   satisfiesVersion,
 } from '../src/util/version.js';
+
+test('parseVersion 支持 CKAN epoch 与松散后缀', () => {
+  const beta = parseVersion('1:v1.3.5_beta');
+  assert.equal(beta.valid, true);
+  assert.equal(beta.epoch, 1);
+  assert.deepEqual(beta.numbers, [1, 3, 5]);
+  assert.deepEqual(beta.prerelease, ['beta']);
+
+  assert.equal(compareVersions('1:v1.3.5_beta', '1:v1.3.4'), 1);
+  assert.equal(compareVersions('1:v0.2.0.0', 'v0.11.1.6'), 1);
+  assert.equal(compareVersions('1.2.2.2a', '1.2.2.2'), -1);
+  assert.equal(satisfiesVersion('1:v1.3.5_beta', '1:v1.3.4'), true);
+});
 
 test('parseKspVersion 截断 KSP 四位构建号', () => {
   assert.deepEqual(parseKspVersion('1.12.5.3190').numbers, [1, 12, 5]);

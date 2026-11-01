@@ -150,6 +150,29 @@ for (let index = 0; index < navCount; index += 1) {
 }
 console.log('views:', JSON.stringify(viewResults));
 
+// Dependency plan flow: a mod that only has unverified versions must explain why and
+// offer a one-click retry instead of failing with a bare "no_version".
+await evaluate(`document.querySelectorAll('.nav-item')[1].click()`);
+await sleep(700);
+await evaluate(`(() => {
+  const input = document.querySelector('#library-q');
+  input.value = 'OldParts';
+  input.closest('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+})()`);
+await sleep(1800);
+await evaluate(`document.querySelector('.mod-card [data-action="plan-install"]')?.click()`);
+await sleep(1800);
+const blockedPlan = await evaluate(`(document.querySelector('.modal-body')?.innerText || '')`);
+const offersRetry = /允许未验证版本/.test(blockedPlan);
+await evaluate(`document.querySelector('.modal [data-action="plan-warning"]')?.click()`);
+await sleep(1800);
+const retriedPlan = await evaluate(`(document.querySelector('.modal-body')?.innerText || '')`);
+const retriedOk = /OldParts/.test(retriedPlan) && !/不能安装/.test(retriedPlan);
+console.log('plan retry:', JSON.stringify({ offersRetry, retriedOk, head: blockedPlan.slice(0, 60) }));
+if (!offersRetry || !retriedOk) {
+  exceptions.push('plan retry flow failed');
+}
+
 console.log('dom bytes:', String(snapshot || '').length);
 console.log('markers:', markers);
 console.log('exceptions:', exceptions.slice(0, 5));

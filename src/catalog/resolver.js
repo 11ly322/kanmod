@@ -176,7 +176,7 @@ export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], a
           ? `已安装版本 ${installedRecord.version} 不在索引中，且没有满足约束的可用版本。`
           : '没有满足依赖约束且适配当前 KSP 版本的版本。',
         requirements: allRequirements,
-        available: details.slice(0, 12),
+        available: details.slice(0, 24),
       },
     };
   }
@@ -207,7 +207,6 @@ export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], a
       seenRequired.add(mark);
       return true;
     });
-    node.direct = Boolean(node.root);
     if (!installedRecord?.version) node.action = 'install';
     else if (versionEqual(installedRecord.version, pkg.version)) node.action = 'keep';
     else if (compareVersions(pkg.version, installedRecord.version) > 0) node.action = 'upgrade';
@@ -219,7 +218,10 @@ export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], a
   function markMissing(name, requirement, requiredBy, reason, extra = {}) {
     const already = missing.find((item) => lower(item.name) === lower(name) && item.requiredBy.id === requiredBy.id);
     if (already) {
-      if (requirement) already.requirements.push(requirement);
+      if (requirement) {
+        if (!Array.isArray(already.requirements)) already.requirements = [];
+        already.requirements.push(requirement);
+      }
       return;
     }
     missing.push({
@@ -266,7 +268,7 @@ export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], a
     if (!name) return;
     const chosen = chooseIdentifier(name);
     if (!chosen) {
-      markMissing(name, relation, parentNode, 'not_found');
+      markMissing(name, relation, parentNode, 'not_found', { root: isRoot });
       return;
     }
     const identifier = chosen.identifier;
@@ -329,7 +331,7 @@ export function resolvePlan({ catalog, roots = [], kspVersion, installed = [], a
 
     const resolution = selectVersion(identifier, requirements.get(key), installedRecord);
     if (!resolution.pkg) {
-      markMissing(name, relation, parentNode, 'no_version', { details: resolution.error, available: resolution.error.available });
+      markMissing(name, relation, parentNode, 'no_version', { root: isRoot, details: resolution.error, available: resolution.error.available });
       return;
     }
     const previous = selected.get(key);

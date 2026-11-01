@@ -778,7 +778,7 @@ export async function translateMod(field = 'abstract', force = false, { silent =
 }
 
 
-export async function openPlan(identifier, version = null) {
+export async function openPlan(identifier, version = null, options = {}) {
   if (!state.bootstrap?.instance) {
     toast('请先连接一个 KSP 实例。', 'warn');
     state.view = 'settings';
@@ -788,14 +788,14 @@ export async function openPlan(identifier, version = null) {
   const root = version ? { identifier, version } : identifier;
   setModalContent(`<div class="modal-head"><div><h2>安装计划</h2><p>正在解析前置依赖与版本兼容性…</p></div><button class="btn icon ghost" type="button" data-action="close-modal" aria-label="关闭">${icon('x')}</button></div>
     <div class="modal-body" style="padding:30px 20px">${spinnerLine('正在计算依赖图…')}</div>`);
-  state.pendingPlan = { identifier, version, plan: null };
+  state.pendingPlan = { identifier, version, plan: null, allowWarning: options.allowWarning };
   try {
     const settings = state.bootstrap.settings?.install || {};
     const data = await api('/api/resolve', {
       method: 'POST',
       body: {
         roots: [root],
-        allowWarning: Boolean(settings.allowWarning),
+        allowWarning: Boolean(options.allowWarning ?? settings.allowWarning),
         allowUnknown: Boolean(settings.allowUnknown),
         includeRecommended: false,
       },
@@ -824,7 +824,7 @@ export async function confirmInstall() {
   try {
     const body = {
       roots: pending.roots || [pending.version ? { identifier: pending.identifier, version: pending.version } : pending.identifier],
-      allowWarning: Boolean(settings.allowWarning),
+      allowWarning: Boolean(pending.allowWarning ?? settings.allowWarning),
       allowUnknown: Boolean(settings.allowUnknown),
       includeRecommended: false,
     };

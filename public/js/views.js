@@ -69,6 +69,43 @@ export function relationText(value) {
 }
 
 
+export function missingReasonText(item) {
+  const reason = item?.reason;
+  const pinned = item?.details?.pinnedVersion;
+  if (reason === 'no_version') {
+    return pinned
+      ? `所选版本 ${pinned} 与当前 KSP 版本不兼容，或没有满足依赖约束`
+      : '没有适配当前 KSP 版本且满足依赖约束的版本';
+  }
+  if (reason === 'not_found') return '索引中找不到这个模组';
+  if (reason === 'conflict') return '与其它依赖的版本约束冲突';
+  return relationText(reason);
+}
+
+
+export function missingRootText(item) {
+  const pinned = item?.details?.pinnedVersion;
+  return pinned
+    ? `所选版本 ${pinned} 不兼容当前游戏版本`
+    : '没有适配当前游戏版本的可用版本';
+}
+
+
+export function retryWithWarnings(item) {
+  const available = item?.details?.available || [];
+  return available.some((entry) => ['warning', 'unknown'].includes(entry?.compatibility?.status));
+}
+
+
+export function missingAlternatives(item) {
+  const rank = { compatible: 0, warning: 1, unknown: 2 };
+  const available = [...(item?.details?.available || [])]
+    .filter((entry) => rank[entry?.compatibility?.status] !== undefined)
+    .sort((a, b) => rank[a.compatibility.status] - rank[b.compatibility.status]);
+  return available.slice(0, 4).map((entry) => entry.version).filter(Boolean);
+}
+
+
 export function overviewHtml() {
   const data = state.bootstrap;
   if (!data.instance) return openOnboarding();
@@ -366,7 +403,7 @@ export function modCard(item) {
         <button class="btn ghost sm" type="button" data-action="open-mod-page" data-id="${esc(item.identifier)}" data-version="${esc(item.version)}">${icon('book', 13)}简介</button>
         ${isCf
           ? `<a class="btn ghost sm" href="${esc(item.curseforge?.url || 'https://www.curseforge.com/kerbal-space-program')}" target="_blank" rel="noreferrer">${icon('link', 13)}CurseForge</a>`
-          : `<button class="btn ${item.installed ? 'soft' : 'primary'} sm" type="button" data-action="plan-install" data-id="${esc(item.identifier)}" data-version="${esc(item.version)}">${item.installed ? '管理' : '安装'}</button>`}
+          : `<button class="btn ${item.installed ? 'soft' : 'primary'} sm" type="button" data-action="plan-install" data-id="${esc(item.identifier)}">${item.installed ? '管理' : '安装'}</button>`}
       </div>
     </div>
   </article>`;
@@ -988,7 +1025,7 @@ export function settingsHtml() {
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.2')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.3')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1003,7 +1040,7 @@ export function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.1.2')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.1.3')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1164,7 +1201,18 @@ export function planModalHtml(plan, rootIdentifier) {
         <div><small>保留</small><strong>${fmtNumber(summary.keep)}</strong></div>
         <div><small>下载</small><strong>${esc(fmtBytes(summary.downloadBytes))}</strong></div>
       </div>
-      ${plan.missing?.length ? `<div class="notice red" style="margin-bottom:12px">${icon('alert', 17)}<div><strong>缺少 ${plan.missing.length} 个必需依赖</strong>，当前计划不能安装。${plan.missing.map((item) => `<div class="text-muted">${esc(item.name || item.identifier)}${item.reason ? ` · ${esc(relationText(item.reason))}` : ''}</div>`).join('')}</div></div>` : ''}
+      ${plan.missing?.length ? `<div class="notice red" style="margin-bottom:12px">${icon('alert', 17)}<div><strong>${plan.missing.every((item) => item.root) ? '所选模组无法安装' : `缺少 ${plan.missing.length} 个必需依赖`}</strong>，当前计划不能安装。${plan.missing.map((item) => {
+        const alternatives = missingAlternatives(item);
+        const identifier = item.details?.identifier || item.name || item.identifier || item.label;
+        const unpinned = item.root && item.details?.pinnedVersion
+          ? `<button class="btn ghost sm" type="button" data-action="plan-install" data-id="${esc(identifier)}">改用兼容版本</button>`
+          : '';
+        const unverified = retryWithWarnings(item)
+          ? `<button class="btn ghost sm" type="button" data-action="plan-warning" data-id="${esc(identifier)}">允许未验证版本</button>`
+          : '';
+        const actions = `${unpinned}${unverified}`;
+        return `<div class="missing-row"><div class="text-muted">${esc(item.name || item.identifier)} · ${esc(item.root ? missingRootText(item) : missingReasonText(item))}${alternatives.length ? `（兼容候选：${esc(alternatives.join(' / '))}）` : ''}</div>${actions ? `<div class="missing-actions">${actions}</div>` : ''}</div>`;
+      }).join('')}</div></div>` : ''}
       ${plan.conflicts?.length ? `<div class="notice red" style="margin-bottom:12px">${icon('alert', 17)}<div><strong>检测到 ${plan.conflicts.length} 个冲突</strong>，请更换版本后再试。${plan.conflicts.map((item) => `<div class="text-muted">${esc(relationText(item))}</div>`).join('')}</div></div>` : ''}
       ${plan.warnings?.length ? `<div class="notice warn" style="margin-bottom:12px">${icon('alert', 17)}<div>${plan.warnings.map((item) => esc(relationText(item))).join('<br>')}</div></div>` : ''}
       <div class="plan-list">${order.map((node) => {

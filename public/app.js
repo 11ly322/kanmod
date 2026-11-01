@@ -66,7 +66,7 @@ export function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.1.2')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.1.3')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -304,6 +304,9 @@ export function setupEvents() {
           break;
         case 'plan-install':
           await openPlan(actionNode.dataset.id, actionNode.dataset.version || null);
+          break;
+        case 'plan-warning':
+          await openPlan(actionNode.dataset.id, null, { allowWarning: true });
           break;
         case 'confirm-install':
           await confirmInstall();

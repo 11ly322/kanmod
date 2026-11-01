@@ -160,3 +160,7 @@
 .empty strong { color: var(--ink); font-size: 13px; }
 .empty p { margin: 0; max-width: 440px; font-size: 11.5px; line-height: 1.6; }
 .empty .btn { margin-top: 6px; }
+.missing-row { margin-top: 6px; }
+.missing-row .text-muted { line-height: 1.7; }
+.missing-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.missing-actions .btn { height: 26px; }
