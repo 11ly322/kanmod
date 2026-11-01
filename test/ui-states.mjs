@@ -105,9 +105,11 @@ async function runScenario({ empty, fixtures }) {
   const spawnArgs = empty
     ? ['bin/kanmod.js', '--no-open', `--port=${port}`]
     : ['bin/kanmod.js', '--demo', '--fresh', '--no-open', `--port=${port}`];
-  const spawnEnv = empty
-    ? { ...process.env, KANMOD_DATA_DIR: mkdtempSync(path.join(tmpdir(), 'kanmod-empty-')) }
-    : process.env;
+  const spawnEnv = {
+    ...process.env,
+    KANMOD_DATA_DIR: mkdtempSync(path.join(tmpdir(), empty ? 'kanmod-empty-' : 'kanmod-sparse-')),
+    ...(empty ? {} : { KANMOD_DEMO_DIR: mkdtempSync(path.join(tmpdir(), 'kanmod-sparse-demo-')) }),
+  };
   const server = spawn(process.execPath, spawnArgs, { cwd: process.cwd(), env: spawnEnv, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   server.stdout.setEncoding('utf8');

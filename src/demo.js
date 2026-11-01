@@ -4,7 +4,9 @@ import { APP_ROOT } from './config.js';
 import { ensureDir, writeFileAtomic } from './util/fsx.js';
 import { createZip } from './util/zip.js';
 
-const DEMO_ROOT = path.join(APP_ROOT, '.data', 'demo');
+const DEMO_ROOT = process.env.KANMOD_DEMO_DIR
+  ? path.resolve(process.env.KANMOD_DEMO_DIR)
+  : path.join(APP_ROOT, '.data', 'demo');
 export const DEMO_KSP_PATH = path.join(DEMO_ROOT, 'ksp');
 export const DEMO_ARCHIVES_DIR = path.join(DEMO_ROOT, 'archives');
 export const DEMO_DATA_DIR = path.join(DEMO_ROOT, 'data');

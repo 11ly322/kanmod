@@ -20,6 +20,7 @@ const debugPort = 9300 + Math.floor(Math.random() * 60);
 
 const server = spawn(process.execPath, ['bin/kanmod.js', '--demo', '--fresh', '--no-open', `--port=${port}`], {
   cwd: process.cwd(),
+  env: { ...process.env, KANMOD_DEMO_DIR: mkdtempSync(path.join(tmpdir(), 'kanmod-ui-demo-')) },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let out = '';

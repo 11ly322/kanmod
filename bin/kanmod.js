@@ -45,7 +45,10 @@ if (explicitDataDir) {
 
 if (demo) {
   // Give the demo its own data directory before importing modules that read DATA_DIR.
-  process.env.KANMOD_DATA_DIR = path.join(APP_ROOT, '.data', 'demo', 'data');
+  const demoRoot = process.env.KANMOD_DEMO_DIR
+    ? path.resolve(process.env.KANMOD_DEMO_DIR)
+    : path.join(APP_ROOT, '.data', 'demo');
+  process.env.KANMOD_DATA_DIR = path.join(demoRoot, 'data');
 }
 
 const { prepareDemo } = await import('../src/demo.js');
