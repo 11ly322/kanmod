@@ -2,9 +2,25 @@
 // against an empty (no instance) profile, then reports visible
 // undefined/null/NaN text, broken attributes and blank labels.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+// Temporary folders (browser profile, demo data) must not survive the run.
+const TEMP_DIRS = [];
+function tempDir(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  TEMP_DIRS.push(dir);
+  return dir;
+}
+process.on('exit', () => {
+  for (const dir of TEMP_DIRS) {
+    // The killed child may hold a handle for a moment; retry briefly.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { rmSync(dir, { recursive: true, force: true }); break; } catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150); }
+    }
+  }
+});
 
 const EDGE = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -55,7 +71,7 @@ const SCAN = `JSON.stringify((() => {
 })())`;
 
 async function connect(debugPort) {
-  const profile = mkdtempSync(path.join(tmpdir(), 'kanmod-states-'));
+  const profile = tempDir('kanmod-states-');
   const edge = spawn(EDGE, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-proxy-server',
     `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, 'about:blank',
@@ -107,8 +123,8 @@ async function runScenario({ empty, fixtures }) {
     : ['bin/kanmod.js', '--demo', '--fresh', '--no-open', `--port=${port}`];
   const spawnEnv = {
     ...process.env,
-    KANMOD_DATA_DIR: mkdtempSync(path.join(tmpdir(), empty ? 'kanmod-empty-' : 'kanmod-sparse-')),
-    ...(empty ? {} : { KANMOD_DEMO_DIR: mkdtempSync(path.join(tmpdir(), 'kanmod-sparse-demo-')) }),
+    KANMOD_DATA_DIR: tempDir(empty ? 'kanmod-empty-' : 'kanmod-sparse-'),
+    ...(empty ? {} : { KANMOD_DEMO_DIR: tempDir('kanmod-sparse-demo-') }),
   };
   const server = spawn(process.execPath, spawnArgs, { cwd: process.cwd(), env: spawnEnv, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
@@ -161,6 +177,11 @@ async function runScenario({ empty, fixtures }) {
 
   client.close();
   server.kill();
+  // Wait for the child to go away before the temp cleanup runs.
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 3000);
+    server.once('exit', () => { clearTimeout(timer); resolve(); });
+  });
   return { report, problems: client.problems, label: empty ? 'empty' : 'sparse' };
 }
 

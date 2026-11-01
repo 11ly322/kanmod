@@ -2,9 +2,25 @@
 // Boots a demo server, opens the app, waits for the SPA to render, then
 // reports visible markers plus any uncaught exceptions or console errors.
 import { spawn } from 'node:child_process';
-import { existsSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+// Temporary folders (browser profile, demo data) must not survive the run.
+const TEMP_DIRS = [];
+function tempDir(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix));
+  TEMP_DIRS.push(dir);
+  return dir;
+}
+process.on('exit', () => {
+  for (const dir of TEMP_DIRS) {
+    // The killed child may hold a handle for a moment; retry briefly.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { rmSync(dir, { recursive: true, force: true }); break; } catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150); }
+    }
+  }
+});
 
 const EDGE = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -20,7 +36,7 @@ const debugPort = 9300 + Math.floor(Math.random() * 60);
 
 const server = spawn(process.execPath, ['bin/kanmod.js', '--demo', '--fresh', '--no-open', `--port=${port}`], {
   cwd: process.cwd(),
-  env: { ...process.env, KANMOD_DEMO_DIR: mkdtempSync(path.join(tmpdir(), 'kanmod-ui-demo-')) },
+  env: { ...process.env, KANMOD_DEMO_DIR: tempDir('kanmod-ui-demo-') },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let out = '';
@@ -38,7 +54,7 @@ const token = await new Promise((resolve, reject) => {
   server.on('exit', (code) => reject(new Error(`server exit ${code}`)));
 });
 
-const profile = mkdtempSync(path.join(tmpdir(), 'kanmod-edge-'));
+const profile = tempDir('kanmod-edge-');
 const edge = spawn(EDGE, [
   '--headless=new',
   '--disable-gpu',
@@ -128,7 +144,9 @@ const evaluate = async (expression) => {
 };
 
 const snapshot = await evaluate('document.documentElement.outerHTML');
-writeFileSync(path.join(tmpdir(), 'kanmod-dom-last.html'), String(snapshot || ''));
+const domFile = path.join(tmpdir(), 'kanmod-dom-last.html');
+TEMP_DIRS.push(domFile);
+writeFileSync(domFile, String(snapshot || ''));
 const markers = await evaluate(`JSON.stringify({
   nav: document.querySelectorAll('.nav-item').length,
   hero: Boolean(document.querySelector('.hero')),
@@ -181,4 +199,9 @@ console.log('console errors:', consoleErrors.slice(0, 5));
 ws.close();
 server.kill();
 edge.kill();
+await new Promise((resolve) => {
+  const timer = setTimeout(resolve, 3000);
+  if (server.exitCode !== null) return resolve();
+  server.once('exit', () => { clearTimeout(timer); resolve(); });
+});
 process.exit(0);

@@ -11,6 +11,7 @@ const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = 4600 + (process.pid % 300);
 const BASE = `http://127.0.0.1:${PORT}`;
 const DEMO_DIR = await fs.mkdtemp(path.join(os.tmpdir(), 'kanmod-e2e-demo-'));
+let FAKE_KSP = null;
 
 let passed = 0;
 const failures = [];
@@ -189,6 +190,7 @@ async function main() {
     check('game launch without exe', demoLaunch.status === 409 && demoLaunch.json?.error?.code === 'GAME_EXECUTABLE_NOT_FOUND' && /设置/.test(String(demoLaunch.json?.error?.message || '')));
 
     const fakeKsp = await fs.mkdtemp(path.join(os.tmpdir(), 'kanmod-e2e-ksp-'));
+    FAKE_KSP = fakeKsp;
     await fs.mkdir(path.join(fakeKsp, 'GameData'), { recursive: true });
     await fs.copyFile(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'where.exe'), path.join(fakeKsp, 'KSP_x64.exe')).catch(() => {});
     const detected = await api(token, '/api/instances/detect', { method: 'POST', body: { path: fakeKsp } });
@@ -224,6 +226,8 @@ async function main() {
   } finally {
     child.kill();
     await new Promise((resolve) => setTimeout(resolve, 300));
+    await fs.rm(DEMO_DIR, { recursive: true, force: true }).catch(() => {});
+    if (FAKE_KSP) await fs.rm(FAKE_KSP, { recursive: true, force: true }).catch(() => {});
   }
 
   console.log(`\ne2e: ${passed} passed, ${failures.length} failed`);
