@@ -799,8 +799,9 @@ export async function openPlan(identifier, version = null) {
         includeRecommended: false,
       },
     });
-    state.pendingPlan.plan = data.plan;
-    setModalContent(planModalHtml(data.plan, identifier), { small: false });
+    const plan = data?.plan || data || {};
+    state.pendingPlan.plan = plan;
+    setModalContent(planModalHtml(plan, identifier), { small: false });
   } catch (error) {
     setModalContent(`<div class="modal-head"><div><h2>无法生成安装计划</h2><p>${esc(identifier)}</p></div><button class="btn icon ghost" type="button" data-action="close-modal" aria-label="关闭">${icon('x')}</button></div>
       <div class="modal-body"><div class="notice red">${icon('alert', 18)}<div>${esc(error.message)}</div></div>${error.code === 'NO_INSTANCE' ? '<button class="btn primary" type="button" data-action="navigate" data-view="settings">去设置实例</button>' : ''}</div>

@@ -1,0 +1,17 @@
+.job-card { border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: var(--shadow-sm); padding: 16px; }
+.job-card + .job-card { margin-top: 10px; }
+.job-head { display: flex; align-items: flex-start; gap: 11px; }
+.job-status-icon { width: 31px; height: 31px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: #f7f4f5; color: var(--muted); }
+.job-status-icon.running { background: var(--red-soft); color: var(--red); }
+.job-status-icon.done { background: var(--green-soft); color: var(--green); }
+.job-status-icon.failed { background: var(--red-soft); color: var(--red-dark); }
+.job-title { flex: 1; min-width: 0; }
+.job-title strong { display: block; font-size: 12.5px; }
+.job-title small { display: block; color: var(--muted-2); font-size: 10px; margin-top: 2px; }
+.progress { height: 6px; border-radius: 999px; background: #f2edef; overflow: hidden; margin: 13px 0 7px; }
+.progress > span { display: block; height: 100%; border-radius: inherit; background: var(--red); transition: width .25s; }
+.job-progress-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 10.5px; }
+.job-logs { margin-top: 11px; }
+.job-logs summary { color: var(--muted); font-size: 10.5px; cursor: pointer; width: max-content; }
+.job-log { margin: 10px 0 0; padding: 9px 10px; max-height: 190px; overflow: auto; border-radius: 8px; background: #faf7f8; border: 1px solid var(--line); color: #5f5559; font-family: var(--mono); font-size: 9.5px; line-height: 1.6; white-space: pre-wrap; }
+.job-error { margin-top: 10px; padding: 9px 10px; border: 1px solid #f2c9ce; border-radius: 8px; background: var(--red-faint); color: var(--red-dark); font-size: 11px; }

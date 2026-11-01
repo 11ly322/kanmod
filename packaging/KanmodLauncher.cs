@@ -12,13 +12,13 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("Kerbal Space Program 1 mod manager")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
-[assembly: AssemblyInformationalVersion("0.1.0")]
+[assembly: AssemblyVersion("0.1.1.0")]
+[assembly: AssemblyFileVersion("0.1.1.0")]
+[assembly: AssemblyInformationalVersion("0.1.1")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.1.0";
+    private const string AppVersion = "0.1.1";
 
     [STAThread]
     private static int Main(string[] args)

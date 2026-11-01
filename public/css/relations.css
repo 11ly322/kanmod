@@ -1,0 +1,42 @@
+.graph-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr); gap: 16px; align-items: start; }
+.graph-card { overflow: hidden; }
+.graph-toolbar { display: flex; align-items: center; gap: 8px; padding: 13px 15px; border-bottom: 1px solid var(--line); }
+.graph-toolbar .search { flex: 1 1 240px; }
+.graph-canvas { background: radial-gradient(circle at 50% 45%, #fff 0%, #fdfbfb 72%); min-height: 360px; overflow: hidden; }
+.graph-canvas svg { width: 100%; height: auto; }
+.graph-edge { fill: none; stroke: #ded8db; stroke-width: 1.2; }
+.graph-edge.red { stroke: #f0b6bd; }
+.graph-edge.dashed { stroke-dasharray: 4 3; }
+.graph-node rect { fill: #fff; stroke: var(--line-strong); stroke-width: 1; }
+.graph-node text { fill: var(--ink-2); font-size: 10.5px; font-family: var(--font); }
+.graph-node .node-sub { fill: var(--muted-2); font-size: 8.5px; font-family: var(--mono); }
+.graph-node.center rect { fill: var(--red); stroke: var(--red); }
+.graph-node.center text { fill: #fff; }
+.graph-node.center .node-sub { fill: #ffd2d6; }
+.graph-node { cursor: pointer; }
+.graph-node:hover rect { stroke: var(--red); }
+.graph-label { fill: var(--muted-2); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; }
+.graph-legend { display: flex; gap: 12px; flex-wrap: wrap; padding: 10px 16px 14px; color: var(--muted-2); font-size: 9.5px; }
+.graph-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.graph-legend i { width: 14px; height: 2px; background: #ded8db; display: inline-block; }
+.graph-legend i.red { background: #f0b6bd; }
+.relation-section { padding: 14px 16px; border-top: 1px solid var(--line); }
+.relation-section:first-child { border-top: 0; }
+.relation-section h3 { margin: 0 0 8px; font-size: 11px; font-weight: 720; display: flex; align-items: center; gap: 6px; }
+.relation-list { display: flex; flex-direction: column; gap: 4px; }
+.relation-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+.relation-item:hover { background: #fdf8f9; border-color: var(--line); }
+.relation-item .rel-name { min-width: 0; flex: 1; }
+.relation-item .rel-name strong { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.relation-item .rel-name small { display: block; color: var(--muted-2); font-size: 9px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.relation-item .rel-status { flex: 0 0 auto; }

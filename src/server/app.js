@@ -18,7 +18,7 @@ import {
 } from './http.js';
 import { nowIso, lower } from './shared.js';
 import { Router } from './router.js';
-import { registerApiRoutes } from './routes/api.js';
+import { registerApiRoutes } from './routes/index.js';
 import { openAppWindow, openInExplorer } from './shell.js';
 
 function createRouter() {

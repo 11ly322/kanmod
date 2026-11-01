@@ -3,6 +3,14 @@ import { esc, fmtBytes, fmtDate, fmtNumber, fmtTime, icon, initial, kindLabel, s
 import { openOnboarding } from '../app.js';
 import { navigate } from './actions.js';
 
+// API pages always carry page/pageCount; fall back to page 1 when a payload is sparse.
+function paginationOf(data) {
+  const page = Number(data?.page) > 0 ? Math.floor(Number(data.page)) : 1;
+  const pageCount = Number(data?.pageCount) > 0 ? Math.floor(Number(data.pageCount)) : 1;
+  return { page, pageCount };
+}
+
+
 export function compatibilityBadge(compatibility) {
   if (!compatibility) return '<span class="badge">兼容性未知</span>';
   const classes = {
@@ -204,14 +212,14 @@ export function installedTable(entries, { compact = false, batchMode = false } =
         return `
         <tr class="${entry.disabled ? 'row-disabled' : ''}">
           ${batchMode ? `<td class="check-cell"><input class="row-select" type="checkbox" value="${esc(key)}" aria-label="选择 ${esc(entry.name || entry.folder || key)}"></td>` : ''}
-          <td><div class="table-mod"><span class="mini-avatar">${initial(entry.name)}</span><div><strong>${esc(entry.name || entry.folder)}</strong><small>${esc(entry.identifier || entry.folder || '')}${entry.disabled ? ' · 已禁用' : ''}</small></div></div></td>
-          <td class="mono">${esc(entry.installedVersion || '—')}${entry.updateAvailable ? `<small class="update-hint">→ ${esc(entry.latestVersion)}</small>` : ''}</td>
+          <td><div class="table-mod"><span class="mini-avatar">${initial(entry.name || entry.folder)}</span><div><strong>${esc(entry.name || entry.folder || entry.identifier || '未命名条目')}</strong><small>${esc(entry.identifier || entry.folder || '')}${entry.disabled ? ' · 已禁用' : ''}</small></div></div></td>
+          <td class="mono">${esc(entry.installedVersion || '—')}${entry.updateAvailable && entry.latestVersion ? `<small class="update-hint">→ ${esc(entry.latestVersion)}</small>` : ''}</td>
           <td>${entry.kspVersion ? `<span class="badge">KSP ${esc(entry.kspVersion)}</span>` : '<span class="text-muted">未声明</span>'}</td>
           <td>${entry.disabled ? '<span class="badge muted">已禁用</span>' : managedBadge(entry)}</td>
           ${compact ? '' : `<td class="mono">${esc(entry.sizeLabel || fmtBytes(entry.size))}</td>`}
           <td><div class="row-actions">
             ${entry.identifier ? `<button class="btn ghost sm" type="button" data-action="open-mod-page" data-id="${esc(entry.identifier)}">${icon('book', 13)}简介</button>` : ''}
-            ${entry.updateAvailable ? `<button class="btn primary sm" type="button" data-action="update-mod" data-id="${esc(entry.identifier)}" title="更新到 ${esc(entry.latestVersion)}">更新</button>` : ''}
+            ${entry.updateAvailable ? `<button class="btn primary sm" type="button" data-action="update-mod" data-id="${esc(entry.identifier)}" title="${entry.latestVersion ? `更新到 ${esc(entry.latestVersion)}` : '更新这个模组'}">更新</button>` : ''}
             ${entry.disabled
               ? `<button class="btn soft sm" type="button" data-action="enable-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('play', 13)}启用</button>`
               : `<button class="btn ghost sm" type="button" data-action="disable-mod" data-id="${esc(entry.identifier || entry.folder)}">${icon('pause', 13)}禁用</button>`}
@@ -294,15 +302,16 @@ export function curseforgeBodyHtml() {
     return `<div class="results-meta"><span>没有匹配的 CurseForge 项目</span></div>
       <div class="empty"><div class="empty-icon">${icon('search')}</div><strong>没有结果</strong><p>换一个关键词再试。</p></div>`;
   }
+  const { page, pageCount } = paginationOf(data);
   return `<div class="results-meta">
-      <span>共 ${fmtNumber(data.total)} 个 CurseForge 项目 · 第 ${data.page} / ${data.pageCount} 页</span>
+      <span>共 ${fmtNumber(data.total)} 个 CurseForge 项目 · 第 ${page} / ${pageCount} 页</span>
       <span>${cf.loading ? '<span class="spinner"></span> 更新中…' : 'CurseForge'}</span>
     </div>
     <div class="mod-grid">${items.map(modCard).join('')}</div>
-    ${data.pageCount > 1 ? `<div class="pagination">
-      <button class="btn ghost sm" type="button" data-action="curseforge-page" data-page="${data.page - 1}" ${data.page <= 1 ? 'disabled' : ''}>上一页</button>
-      <span>第 ${data.page} / ${data.pageCount} 页</span>
-      <button class="btn ghost sm" type="button" data-action="curseforge-page" data-page="${data.page + 1}" ${data.page >= data.pageCount ? 'disabled' : ''}>下一页</button>
+    ${pageCount > 1 ? `<div class="pagination">
+      <button class="btn ghost sm" type="button" data-action="curseforge-page" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+      <span>第 ${page} / ${pageCount} 页</span>
+      <button class="btn ghost sm" type="button" data-action="curseforge-page" data-page="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>下一页</button>
     </div>` : ''}`;
 }
 
@@ -323,15 +332,16 @@ export function libraryBodyHtml() {
     return `<div class="results-meta"><span>没有匹配的模组</span><span>${lib.loading ? '<span class="spinner"></span>' : ''}</span></div>
       <div class="empty"><div class="empty-icon">${icon('search')}</div><strong>没有结果</strong><p>换一个关键词，或把筛选切回“全部”。</p><button class="btn ghost" type="button" data-action="clear-library-filter">清除筛选</button></div>`;
   }
+  const { page, pageCount } = paginationOf(data);
   return `<div class="results-meta">
-      <span>共 ${fmtNumber(data.total)} 个模组 · 第 ${data.page} / ${data.pageCount} 页</span>
+      <span>共 ${fmtNumber(data.total)} 个模组 · 第 ${page} / ${pageCount} 页</span>
       <span>${lib.loading ? '<span class="spinner"></span> 更新中…' : esc(sourceNameLabel(state.bootstrap.catalog?.sourceName))}</span>
     </div>
     <div class="mod-grid">${items.map(modCard).join('')}</div>
-    ${data.pageCount > 1 ? `<div class="pagination">
-      <button class="btn ghost sm" type="button" data-action="library-page" data-page="${data.page - 1}" ${data.page <= 1 ? 'disabled' : ''}>上一页</button>
-      <span>第 ${data.page} / ${data.pageCount} 页</span>
-      <button class="btn ghost sm" type="button" data-action="library-page" data-page="${data.page + 1}" ${data.page >= data.pageCount ? 'disabled' : ''}>下一页</button>
+    ${pageCount > 1 ? `<div class="pagination">
+      <button class="btn ghost sm" type="button" data-action="library-page" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+      <span>第 ${page} / ${pageCount} 页</span>
+      <button class="btn ghost sm" type="button" data-action="library-page" data-page="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>下一页</button>
     </div>` : ''}`;
 }
 
@@ -346,12 +356,12 @@ export function modCard(item) {
     ${installed}
     <div class="mod-card-top">
       <span class="mod-avatar" aria-hidden="true">${initial(item.name)}</span>
-      <div class="mod-title"><h3 title="${esc(item.name)}">${esc(title)}</h3>${title !== item.name ? `<span class="mod-original-title">${esc(item.name)}</span>` : ''}<span class="mod-id">${esc(item.identifier)}</span></div>
+      <div class="mod-title"><h3 title="${esc(item.name || item.identifier)}">${esc(title || item.identifier || '未命名模组')}</h3>${title !== item.name ? `<span class="mod-original-title">${esc(item.name)}</span>` : ''}<span class="mod-id">${esc(item.identifier || '—')}</span></div>
     </div>
     <p class="mod-abstract">${esc(item.abstract || '这个模组还没有简介。')}</p>
     <div class="mod-meta">${compatibilityBadge(item.compatibility)}<span class="tag">${esc(kindLabel(item.kind))}</span>${(item.tags || []).slice(0, 2).map((tag) => `<span class="tag">${esc(tagLabel(tag))}</span>`).join('')}${item.downloadSize ? `<span class="tag">${esc(fmtBytes(item.downloadSize))}</span>` : ''}</div>
     <div class="mod-foot">
-      <span class="version">v${esc(item.version)}</span>
+      <span class="version">${item.version ? `v${esc(item.version)}` : '版本未知'}</span>
       <div class="mod-actions">
         <button class="btn ghost sm" type="button" data-action="open-mod-page" data-id="${esc(item.identifier)}" data-version="${esc(item.version)}">${icon('book', 13)}简介</button>
         ${isCf
@@ -456,7 +466,7 @@ export function modPageHtml() {
   const compatibility = data.compatibility;
   const abstract = pkg.abstract || '这个模组还没有简介。';
   const description = String(pkg.description || '').trim();
-  const displayName = mod.translations?.name?.text || pkg.name;
+  const displayName = mod.translations?.name?.text || pkg.name || pkg.identifier || '未命名模组';
   return `
     <div class="mod-page-head">
       <div>
@@ -467,7 +477,7 @@ export function modPageHtml() {
             <p class="eyebrow">模组简介 · ${esc(kindLabel(pkg.kind))}</p>
             <h2>${esc(displayName)}</h2>
             ${displayName !== pkg.name ? `<p class="mod-original-name">${esc(pkg.name)}</p>` : ''}
-            <div class="mod-page-sub"><span class="mono">${esc(pkg.identifier)}</span><span>v${esc(pkg.version)}</span>${installed ? `<span class="badge ok dot">已安装 ${esc(installed)}</span>` : ''}</div>
+            <div class="mod-page-sub"><span class="mono">${esc(pkg.identifier || '—')}</span><span>${pkg.version ? `v${esc(pkg.version)}` : '版本未知'}</span>${installed ? `<span class="badge ok dot">已安装 ${esc(installed)}</span>` : ''}</div>
           </div>
         </div>
         <div class="mod-page-badges">${compatibilityBadge(compatibility)}${pkg.releaseStatus && pkg.releaseStatus !== 'stable' ? `<span class="badge warn">${esc(pkg.releaseStatus)}</span>` : ''}<span class="badge">${esc(kindLabel(pkg.kind))}</span></div>
@@ -498,7 +508,7 @@ export function modPageHtml() {
         <section class="card mod-side-card">
           <div class="card-head"><h3>模组信息</h3></div>
           <dl class="mod-detail-list">
-            <div><dt>当前版本</dt><dd class="mono">${esc(pkg.version)}</dd></div>
+            <div><dt>当前版本</dt><dd class="mono">${esc(pkg.version || '—')}</dd></div>
             <div><dt>作者</dt><dd>${esc(pkg.author || '未注明')}</dd></div>
             <div><dt>适用 KSP</dt><dd>${esc(pkg.kspVersion || (pkg.kspVersionMin || pkg.kspVersionMax ? `${pkg.kspVersionMin || '?'} – ${pkg.kspVersionMax || '?'}` : '未声明'))}</dd></div>
             <div><dt>下载体积</dt><dd>${esc(fmtBytes(pkg.downloadSize))}</dd></div>
@@ -643,7 +653,7 @@ export function issueCard(issue) {
     <div class="issue-main">
       <div class="issue-icon ${issue.severity}">${icon(issue.severity === 'error' ? 'alert' : issue.severity === 'warning' ? 'alert' : 'info', 15)}</div>
       <div class="issue-copy">
-        <strong>${esc(issue.title || issue.code)}</strong>
+        <strong>${esc(issue.title || issue.code || '未命名问题')}</strong>
         <p class="issue-detail">${esc(issue.detail || '')}</p>
       </div>
       <span class="badge ${issue.severity === 'error' ? 'bad' : issue.severity === 'warning' ? 'warn' : 'info'}">${esc(issue.severity === 'error' ? '错误' : issue.severity === 'warning' ? '警告' : '提示')}</span>
@@ -830,7 +840,7 @@ export function jobCompact(job) {
   const percent = Math.max(0, Math.min(100, Number(job.progress?.percent) || 0));
   return `<div class="issue-row">
     <div class="issue-icon ${job.status === 'failed' ? 'error' : job.status === 'done' ? '' : 'warning'}">${icon(job.status === 'done' ? 'check' : job.status === 'failed' ? 'alert' : 'refresh', 15)}</div>
-    <div class="issue-copy"><strong>${esc(job.title)}</strong><p>${esc(job.progress?.message || '等待执行…')}</p>
+    <div class="issue-copy"><strong>${esc(job.title || '未命名任务')}</strong><p>${esc(job.progress?.message || '等待执行…')}</p>
       <div class="progress" style="margin:8px 0 0"><span style="width:${percent}%"></span></div>
     </div>
     <div class="issue-actions">${jobStatusBadge(job.status)}</div>
@@ -857,7 +867,7 @@ export function jobCard(job) {
   return `<div class="job-card">
     <div class="job-head">
       <div class="job-status-icon ${job.status === 'running' ? 'running' : job.status === 'done' ? 'done' : job.status === 'failed' ? 'failed' : ''}">${icon(status[0], 15)}</div>
-      <div class="job-title"><strong>${esc(job.title)}</strong><small>${esc(job.type || 'task')} · 创建于 ${esc(fmtDate(job.createdAt))}</small></div>
+      <div class="job-title"><strong>${esc(job.title || '未命名任务')}</strong><small>${esc(job.type || 'task')} · 创建于 ${esc(fmtDate(job.createdAt))}</small></div>
       ${jobStatusBadge(job.status)}
       ${active ? `<button class="btn danger sm" type="button" data-action="cancel-job" data-id="${esc(job.id)}">取消</button>` : ''}
     </div>
@@ -978,7 +988,7 @@ export function settingsHtml() {
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.0')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.1')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -993,7 +1003,7 @@ export function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.1.0')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.1.1')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1140,6 +1150,7 @@ export function shortVersion(version) {
 
 
 export function planModalHtml(plan, rootIdentifier) {
+  plan = plan || {};
   const summary = plan.summary || {};
   const order = plan.installOrder || [];
   const actionable = (summary.install || 0) + (summary.upgrade || 0) + (summary.downgrade || 0);
