@@ -12,13 +12,13 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("Kerbal Space Program 1 mod manager")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.3.0")]
-[assembly: AssemblyFileVersion("0.0.3.0")]
-[assembly: AssemblyInformationalVersion("0.0.3")]
+[assembly: AssemblyVersion("0.0.4.0")]
+[assembly: AssemblyFileVersion("0.0.4.0")]
+[assembly: AssemblyInformationalVersion("0.0.4")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.0.3";
+    private const string AppVersion = "0.0.4";
 
     [STAThread]
     private static int Main(string[] args)
@@ -29,12 +29,11 @@ internal static class Program
         bool noOpen = HasArg(args, "--no-open");
         bool stop = HasArg(args, "--stop");
 
+        string appDir = AppDomain.CurrentDomain.BaseDirectory;
         string dataDir = Environment.GetEnvironmentVariable("KANMOD_DATA_DIR");
         if (string.IsNullOrWhiteSpace(dataDir))
         {
-            dataDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "kanmod", "data");
+            dataDir = Path.Combine(appDir, "data");
         }
         Directory.CreateDirectory(dataDir);
 
@@ -57,7 +56,6 @@ internal static class Program
             return 0;
         }
 
-        string appDir = AppDomain.CurrentDomain.BaseDirectory;
         string nodeExe = Path.Combine(appDir, "node.exe");
         string entry = Path.Combine(appDir, "bin", "supervisor.js");
         if (!File.Exists(nodeExe) || !File.Exists(entry))

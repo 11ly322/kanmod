@@ -31,7 +31,7 @@ import { safeFileName } from './src/util/paths.js';
 import { normalizeIdentifier } from './src/util/version.js';
 
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
-const APP_VERSION = '0.0.3';
+const APP_VERSION = '0.0.4';
 const MAX_JSON_BODY = 4 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const COOKIE_NAME = 'kanmod_token';

@@ -9,18 +9,19 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 [assembly: AssemblyTitle("kanmod setup")]
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.3.0")]
-[assembly: AssemblyFileVersion("0.0.3.0")]
-[assembly: AssemblyInformationalVersion("0.0.3")]
+[assembly: AssemblyVersion("0.0.4.0")]
+[assembly: AssemblyFileVersion("0.0.4.0")]
+[assembly: AssemblyInformationalVersion("0.0.4")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.0.3";
+    internal const string AppVersion = "0.0.4";
 
     [STAThread]
     private static int Main(string[] args)
@@ -63,6 +64,42 @@ internal static class Program
 
     internal static string DefaultInstallDir()
     {
+        string configured = Environment.GetEnvironmentVariable("KANMOD_INSTALL_DIR");
+        if (!string.IsNullOrWhiteSpace(configured))
+            return Path.GetFullPath(configured);
+
+        // Prefer a real non-system drive so program and data stay together off C:.
+        try
+        {
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                if (!drive.IsReady || drive.DriveType != DriveType.Fixed) continue;
+                if (string.Equals(drive.RootDirectory.FullName, Path.GetPathRoot(Environment.SystemDirectory), StringComparison.OrdinalIgnoreCase)) continue;
+                if (drive.AvailableFreeSpace < 512L * 1024 * 1024) continue;
+                return Path.Combine(drive.RootDirectory.FullName, "Programs", "kanmod");
+            }
+        }
+        catch { }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "kanmod");
+    }
+
+    internal static string DataDirFor(string targetDir)
+    {
+        return Path.Combine(Path.GetFullPath(targetDir), "data");
+    }
+
+    internal static string LegacyDataDir()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "kanmod", "data");
+    }
+
+    internal static string LegacyInstallDir()
+    {
         return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Programs", "kanmod");
@@ -73,63 +110,165 @@ internal static class Program
         if (string.IsNullOrWhiteSpace(targetDir))
             throw new InvalidOperationException("安装目录不能为空。");
 
-        targetDir = Path.GetFullPath(targetDir);
-        StopExistingServer();
-        if (Directory.Exists(targetDir))
-        {
-            try { Directory.Delete(targetDir, true); }
-            catch (Exception ex)
-            {
-                throw new IOException("无法覆盖安装目录。请先退出 kanmod，再重试。\n" + ex.Message);
-            }
-        }
-        Directory.CreateDirectory(targetDir);
+        targetDir = Path.GetFullPath(targetDir).TrimEnd('\\');
+        if (string.Equals(targetDir, Path.GetPathRoot(targetDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("不能把 kanmod 安装到磁盘根目录。请选择单独的子目录。");
 
-        string tempZip = Path.Combine(targetDir, ".kanmod-payload.zip");
+        string dataDir = DataDirFor(targetDir);
+        string legacyData = LegacyDataDir();
+        string legacyInstall = LegacyInstallDir();
+        StopExistingServer(targetDir);
+
+        string backup = null;
+        if (Directory.Exists(dataDir))
+        {
+            backup = Path.Combine(Path.GetDirectoryName(targetDir), "." + Path.GetFileName(targetDir) + ".data-" + DateTime.Now.Ticks);
+            Directory.Move(dataDir, backup);
+        }
+
         try
         {
-            using (Stream resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
+            if (Directory.Exists(targetDir))
             {
-                if (resource == null) throw new InvalidOperationException("安装包资源缺失。");
-                using (var file = File.Create(tempZip)) resource.CopyTo(file);
+                try { Directory.Delete(targetDir, true); }
+                catch (Exception ex)
+                {
+                    throw new IOException("无法覆盖安装目录。请先退出 kanmod，再重试。\n" + ex.Message);
+                }
             }
-            ZipFile.ExtractToDirectory(tempZip, targetDir);
+            Directory.CreateDirectory(targetDir);
+
+            string tempZip = Path.Combine(targetDir, ".kanmod-payload.zip");
+            try
+            {
+                using (Stream resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
+                {
+                    if (resource == null) throw new InvalidOperationException("安装包资源缺失。");
+                    using (var file = File.Create(tempZip)) resource.CopyTo(file);
+                }
+                ZipFile.ExtractToDirectory(tempZip, targetDir);
+            }
+            finally
+            {
+                try { File.Delete(tempZip); } catch { }
+            }
+
+            string exe = Path.Combine(targetDir, "kanmod.exe");
+            string uninstaller = Path.Combine(targetDir, "uninstall.exe");
+            if (!File.Exists(exe))
+                throw new InvalidOperationException("安装包不完整：缺少 kanmod.exe。");
+            if (!File.Exists(uninstaller))
+                throw new InvalidOperationException("安装包不完整：缺少 uninstall.exe。");
+
+            if (!string.IsNullOrEmpty(backup) && Directory.Exists(backup))
+            {
+                Directory.Move(backup, dataDir);
+            }
+            else if (!Directory.Exists(dataDir) && Directory.Exists(legacyData))
+            {
+                CopyDirectory(legacyData, dataDir);
+            }
+
+            File.WriteAllText(Path.Combine(targetDir, "install.json"),
+                "{\r\n  \"version\": \"" + AppVersion + "\",\r\n  \"path\": \"" +
+                targetDir.Replace("\\", "\\\\") + "\",\r\n  \"dataDir\": \"" +
+                dataDir.Replace("\\", "\\\\") + "\",\r\n  \"installedAt\": \"" +
+                DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") + "\"\r\n}\r\n",
+                Encoding.UTF8);
+
+            if (createIcons)
+                CreateIcons(targetDir, exe, uninstaller);
+            RegisterUninstall(targetDir, exe, uninstaller);
+
+            CleanupLegacy(legacyInstall, legacyData, targetDir);
         }
-        finally
+        catch
         {
-            try { File.Delete(tempZip); } catch { }
-        }
-
-        string exe = Path.Combine(targetDir, "kanmod.exe");
-        if (!File.Exists(exe))
-            throw new InvalidOperationException("安装包不完整：缺少 kanmod.exe。");
-
-        File.WriteAllText(Path.Combine(targetDir, "install.json"),
-            "{\r\n  \"version\": \"" + AppVersion + "\",\r\n  \"path\": \"" +
-            targetDir.Replace("\\", "\\\\") + "\",\r\n  \"installedAt\": \"" +
-            DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") + "\"\r\n}\r\n",
-            Encoding.UTF8);
-
-        if (createIcons)
-        {
-            CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "kanmod.lnk"), exe, targetDir);
-            string menuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "kanmod");
-            Directory.CreateDirectory(menuDir);
-            CreateShortcut(Path.Combine(menuDir, "kanmod.lnk"), exe, targetDir);
+            if (!string.IsNullOrEmpty(backup) && Directory.Exists(backup) && !Directory.Exists(dataDir))
+            {
+                try { Directory.Move(backup, dataDir); } catch { }
+            }
+            throw;
         }
     }
 
-    private static void StopExistingServer()
+    private static void CreateIcons(string targetDir, string exe, string uninstaller)
+    {
+        CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "kanmod.lnk"), exe, targetDir);
+        string menuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "kanmod");
+        Directory.CreateDirectory(menuDir);
+        CreateShortcut(Path.Combine(menuDir, "kanmod.lnk"), exe, targetDir);
+        CreateShortcut(Path.Combine(menuDir, "卸载 kanmod.lnk"), uninstaller, targetDir);
+    }
+
+    private static void RegisterUninstall(string targetDir, string exe, string uninstaller)
+    {
+        using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\kanmod"))
+        {
+            if (key == null) return;
+            key.SetValue("DisplayName", "kanmod", RegistryValueKind.String);
+            key.SetValue("DisplayVersion", AppVersion, RegistryValueKind.String);
+            key.SetValue("Publisher", "kanmod", RegistryValueKind.String);
+            key.SetValue("InstallLocation", targetDir, RegistryValueKind.String);
+            key.SetValue("DisplayIcon", exe + ",0", RegistryValueKind.String);
+            key.SetValue("UninstallString", "\"" + uninstaller + "\"", RegistryValueKind.String);
+            key.SetValue("QuietUninstallString", "\"" + uninstaller + "\" /S", RegistryValueKind.String);
+            key.SetValue("NoModify", 1, RegistryValueKind.DWord);
+            key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+            key.SetValue("EstimatedSize", 64000, RegistryValueKind.DWord);
+        }
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (string directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(destination, directory.Substring(source.Length).TrimStart('\\')));
+        foreach (string file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        {
+            string relative = file.Substring(source.Length).TrimStart('\\');
+            string target = Path.Combine(destination, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target));
+            File.Copy(file, target, true);
+        }
+    }
+
+    private static void CleanupLegacy(string legacyInstall, string legacyData, string targetDir)
     {
         try
         {
-            string dataDir = Environment.GetEnvironmentVariable("KANMOD_DATA_DIR");
-            if (string.IsNullOrWhiteSpace(dataDir))
+            string newData = DataDirFor(targetDir);
+            if (!string.Equals(legacyData, newData, StringComparison.OrdinalIgnoreCase) && Directory.Exists(legacyData))
             {
-                dataDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "kanmod", "data");
+                Directory.Delete(legacyData, true);
+                string legacyRoot = Path.GetDirectoryName(legacyData);
+                if (Directory.Exists(legacyRoot) && Directory.GetFileSystemEntries(legacyRoot).Length == 0)
+                    Directory.Delete(legacyRoot);
             }
+        }
+        catch { }
+
+        try
+        {
+            if (!string.Equals(legacyInstall.TrimEnd('\\'), targetDir, StringComparison.OrdinalIgnoreCase) && Directory.Exists(legacyInstall))
+                Directory.Delete(legacyInstall, true);
+        }
+        catch { }
+    }
+
+    private static void StopExistingServer(string targetDir)
+    {
+        StopDataDir(DataDirFor(targetDir));
+        StopDataDir(LegacyDataDir());
+        StopLauncher(targetDir);
+        StopLauncher(LegacyInstallDir());
+        Thread.Sleep(300);
+    }
+
+    private static void StopDataDir(string dataDir)
+    {
+        try
+        {
             string[] files =
             {
                 Path.Combine(dataDir, "supervisor.json"),
@@ -158,7 +297,28 @@ internal static class Program
                 }
                 try { File.Delete(file); } catch { }
             }
-            Thread.Sleep(300);
+        }
+        catch { }
+    }
+
+    private static void StopLauncher(string installDir)
+    {
+        try
+        {
+            string prefix = installDir.TrimEnd('\\') + "\\";
+            foreach (Process process in Process.GetProcessesByName("kanmod"))
+            {
+                try
+                {
+                    string path = process.MainModule.FileName;
+                    if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill();
+                        process.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
         }
         catch { }
     }
@@ -195,11 +355,16 @@ internal static class Program
         return false;
     }
 
+    private static string SetupLogPath()
+    {
+        return Path.Combine(Path.GetTempPath(), "kanmod-setup.log");
+    }
+
     private static void WriteInstallError(Exception ex)
     {
         try
         {
-            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kanmod-install-error.log"),
+            File.WriteAllText(Path.Combine(Path.GetTempPath(), "kanmod-install-error.log"),
                 DateTime.Now + Environment.NewLine + ex, Encoding.UTF8);
         }
         catch { }
@@ -209,7 +374,7 @@ internal static class Program
     {
         try
         {
-            File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kanmod-setup.log"),
+            File.AppendAllText(SetupLogPath(),
                 DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message + Environment.NewLine,
                 Encoding.UTF8);
         }
@@ -271,22 +436,22 @@ internal sealed class SetupForm : Form
 
         var intro = new Label
         {
-            Text = "安装 kanmod 桌面启动器。安装包自带运行环境，不需要预先安装 Node.js。",
+            Text = "安装 kanmod 桌面启动器。程序、运行环境和用户数据都保存在安装目录，默认优先选择非 C 盘。",
             Location = new Point(28, 120),
-            Size = new Size(580, 24)
+            Size = new Size(580, 38)
         };
-        var pathLabel = new Label { Text = "安装位置", Location = new Point(28, 158), AutoSize = true };
+        var pathLabel = new Label { Text = "安装位置", Location = new Point(28, 164), AutoSize = true };
         pathBox = new TextBox
         {
             Text = initialDir,
-            Location = new Point(28, 182),
+            Location = new Point(28, 188),
             Width = 500,
             Height = 26
         };
         var browse = new Button
         {
             Text = "浏览…",
-            Location = new Point(538, 181),
+            Location = new Point(538, 187),
             Size = new Size(74, 27)
         };
         browse.Click += delegate
@@ -303,21 +468,21 @@ internal sealed class SetupForm : Form
         {
             Text = "创建桌面快捷方式",
             Checked = true,
-            Location = new Point(28, 222),
+            Location = new Point(28, 226),
             AutoSize = true
         };
         var note = new Label
         {
-            Text = "用户数据保存在 %LOCALAPPDATA%\\kanmod\\data，升级或重新安装不会删除模组数据。",
+            Text = "程序、模组数据、缓存和备份都保存在安装目录。卸载程序会停止服务并删除整个安装目录。",
             ForeColor = Color.FromArgb(120, 116, 112),
-            Location = new Point(28, 250),
-            Size = new Size(580, 22)
+            Location = new Point(28, 254),
+            Size = new Size(580, 40)
         };
 
         installButton = new Button
         {
             Text = "安装 kanmod",
-            Location = new Point(28, 292),
+            Location = new Point(28, 304),
             Size = new Size(160, 40),
             BackColor = Color.FromArgb(225, 29, 46),
             ForeColor = Color.White,
@@ -329,7 +494,7 @@ internal sealed class SetupForm : Form
         var cancel = new Button
         {
             Text = "取消",
-            Location = new Point(524, 292),
+            Location = new Point(524, 304),
             Size = new Size(88, 40),
             DialogResult = DialogResult.Cancel
         };
@@ -337,7 +502,7 @@ internal sealed class SetupForm : Form
         statusLabel = new Label
         {
             Text = "",
-            Location = new Point(28, 344),
+            Location = new Point(28, 354),
             Size = new Size(584, 24),
             ForeColor = Color.FromArgb(110, 105, 102)
         };
@@ -373,7 +538,7 @@ internal sealed class SetupForm : Form
             statusLabel.Text = "安装完成。";
             Cursor = Cursors.Default;
             DialogResult result = MessageBox.Show(this,
-                "kanmod " + Program.AppVersion + " 已安装完成。\n\n是否现在启动？",
+                "kanmod " + Program.AppVersion + " 已安装完成。\n\n程序与数据都在安装目录，卸载时可一并删除。\n\n是否现在启动？",
                 "安装完成", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
             if (result == DialogResult.Yes)
             {

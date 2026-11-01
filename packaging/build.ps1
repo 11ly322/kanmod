@@ -1,6 +1,6 @@
 param(
   [string]$NodeExe = "",
-  [string]$Version = "0.0.3"
+  [string]$Version = "0.0.4"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,6 +39,13 @@ $icon = Join-Path $PSScriptRoot "kanmod.ico"
   (Join-Path $PSScriptRoot "KanmodLauncher.cs")
 if ($LASTEXITCODE -ne 0) { throw "launcher compile failed" }
 Copy-Item $launcher (Join-Path $payload "kanmod.exe")
+
+$uninstaller = Join-Path $build "uninstall.exe"
+& $csc /nologo /target:winexe /codepage:65001 "/out:$uninstaller" "/win32icon:$icon" `
+  /reference:System.dll /reference:System.Core.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
+  (Join-Path $PSScriptRoot "KanmodUninstaller.cs")
+if ($LASTEXITCODE -ne 0) { throw "uninstaller compile failed" }
+Copy-Item $uninstaller (Join-Path $payload "uninstall.exe")
 
 $zip = Join-Path $build "payload.zip"
 Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $zip -CompressionLevel Optimal

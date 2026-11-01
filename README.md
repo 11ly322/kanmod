@@ -4,7 +4,7 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.0.3-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.0.4-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -28,15 +28,18 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.3.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.4.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
-默认安装位置  %LOCALAPPDATA%\Programs\kanmod
-数据目录      %LOCALAPPDATA%\kanmod\data
+默认安装位置  第一个非 C 盘的 \Programs\kanmod（可在安装器里修改）
+数据目录      <安装目录>\data
 停止服务      kanmod.exe --stop
+卸载          开始菜单 → 卸载 kanmod，或 Windows 设置 → 应用
 ```
 
-安装包自带 Node.js 运行时，不会修改系统环境变量。卸载时退出 kanmod 后删除安装目录即可，数据目录会保留。
+安装包自带 Node.js 运行时，不会修改系统环境变量。**程序、模组数据、缓存、备份和回收站都在安装目录内**；默认优先选择非 C 盘，卸载程序会停止服务并删除整个安装目录，C 盘不会留下用户数据。
+
+从 0.0.3 升级时，旧数据会从 `%LOCALAPPDATA%\kanmod\data` 自动迁移到新安装目录，迁移成功后清理旧目录。
 
 ### 无法连接本地服务
 
@@ -74,7 +77,7 @@ node bin/kanmod.js --help
 
 ## 数据目录
 
-安装版默认使用 `%LOCALAPPDATA%\kanmod\data`；从源码运行时默认使用项目的 `.data/`。可用环境变量 `KANMOD_DATA_DIR` 覆盖：
+安装版默认使用 `<安装目录>\data`；从源码运行时默认使用项目的 `.data/`。可用环境变量 `KANMOD_DATA_DIR` 覆盖：
 
 ```text
 data/
@@ -132,7 +135,7 @@ test/                Node 内置测试
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.0.3.exe`。安装器把应用和 Node.js 运行时释放到 `%LOCALAPPDATA%\Programs\kanmod`，数据单独保存在 `%LOCALAPPDATA%\kanmod\data`。
+产物位于 `.artifacts/build/kanmod-setup-0.0.4.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
 
 ## 已知限制
 
