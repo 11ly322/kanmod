@@ -3,12 +3,14 @@
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = 4600 + (process.pid % 300);
 const BASE = `http://127.0.0.1:${PORT}`;
+const DEMO_DIR = await fs.mkdtemp(path.join(os.tmpdir(), 'kanmod-e2e-demo-'));
 
 let passed = 0;
 const failures = [];
@@ -24,7 +26,7 @@ function check(name, condition, detail = '') {
 async function boot() {
   const child = spawn(process.execPath, [path.join(ROOT, 'bin', 'kanmod.js'), '--demo', '--fresh', '--no-open', `--port=${PORT}`], {
     cwd: ROOT,
-    env: { ...process.env, KANMOD_E2E: '1' },
+    env: { ...process.env, KANMOD_E2E: '1', KANMOD_DEMO_DIR: DEMO_DIR },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
