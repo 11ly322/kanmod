@@ -6,22 +6,21 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using Kanmod.Installer;
 
 [assembly: AssemblyTitle("kanmod setup")]
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.71.0")]
-[assembly: AssemblyFileVersion("0.0.71.0")]
-[assembly: AssemblyInformationalVersion("0.0.71")]
+[assembly: AssemblyVersion("0.0.72.0")]
+[assembly: AssemblyFileVersion("0.0.72.0")]
+[assembly: AssemblyInformationalVersion("0.0.72")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.0.71";
+    internal const string AppVersion = "0.0.72";
 
     [STAThread]
     private static int Main(string[] args)
@@ -119,24 +118,37 @@ internal static class Program
         string legacyInstall = LegacyInstallDir();
         StopExistingServer(targetDir);
 
+        // The launcher stores state in the data subfolder. A manual
+        // "node bin/kanmod.js" run uses the dot-data folder instead; migrate it
+        // so an upgrade never discards
+        // an existing configuration, index cache or mod registry.
+        string existingData = null;
+        if (Directory.Exists(dataDir)) existingData = dataDir;
+        else if (Directory.Exists(Path.Combine(targetDir, ".data")))
+        {
+            existingData = Path.Combine(targetDir, ".data");
+            Log("migrating .data to data");
+        }
+
         string backup = null;
-        if (Directory.Exists(dataDir))
+        if (existingData != null)
         {
             backup = Path.Combine(Path.GetDirectoryName(targetDir), "." + Path.GetFileName(targetDir) + ".data-" + DateTime.Now.Ticks);
-            Directory.Move(dataDir, backup);
+            InstallerCore.EnsureUserAccess(existingData, Log);
+            Directory.Move(existingData, backup);
         }
 
         try
         {
             if (Directory.Exists(targetDir))
             {
-                try { Directory.Delete(targetDir, true); }
-                catch (Exception ex)
-                {
-                    throw new IOException("无法覆盖安装目录。请先退出 kanmod，再重试。\n" + ex.Message);
-                }
+                // Refuse early with an actionable message when an older elevated
+                // install left a directory this user cannot replace.
+                InstallerCore.RequireUserAccess(targetDir, Log);
+                InstallerCore.DeleteDirectoryWithRetry(targetDir, Log);
             }
             Directory.CreateDirectory(targetDir);
+            InstallerCore.EnsureUserAccess(targetDir, Log);
 
             string tempZip = Path.Combine(targetDir, ".kanmod-payload.zip");
             try
@@ -171,6 +183,9 @@ internal static class Program
             {
                 CopyDirectory(legacyData, dataDir);
             }
+
+            if (Directory.Exists(dataDir))
+                InstallerCore.EnsureUserAccess(dataDir, Log);
 
             File.WriteAllText(Path.Combine(targetDir, "install.json"),
                 "{\r\n  \"version\": \"" + AppVersion + "\",\r\n  \"path\": \"" +
@@ -262,115 +277,9 @@ internal static class Program
 
     private static void StopExistingServer(string targetDir)
     {
-        StopInstallNodes(targetDir);
-        StopInstallNodes(LegacyInstallDir());
-        StopKanmodFolderNodes();
-        StopDataDir(DataDirFor(targetDir));
-        StopDataDir(LegacyDataDir());
-        StopLauncher(targetDir);
-        StopLauncher(LegacyInstallDir());
-        Thread.Sleep(300);
-    }
-
-    private static void StopInstallNodes(string installDir)
-    {
-        try
-        {
-            string prefix = Path.GetFullPath(installDir).TrimEnd('\\') + "\\";
-            foreach (Process process in Process.GetProcessesByName("node"))
-            {
-                try
-                {
-                    string path = process.MainModule.FileName;
-                    if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        process.Kill();
-                        process.WaitForExit(3000);
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-    }
-
-    private static void StopKanmodFolderNodes()
-    {
-        try
-        {
-            foreach (Process process in Process.GetProcessesByName("node"))
-            {
-                try
-                {
-                    string dir = Path.GetDirectoryName(process.MainModule.FileName);
-                    if (dir != null && string.Equals(Path.GetFileName(dir), "kanmod", StringComparison.OrdinalIgnoreCase))
-                    {
-                        process.Kill();
-                        process.WaitForExit(3000);
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-    }
-
-    private static void StopDataDir(string dataDir)
-    {
-        try
-        {
-            string[] files =
-            {
-                Path.Combine(dataDir, "supervisor.json"),
-                Path.Combine(dataDir, "runtime.json")
-            };
-            foreach (string file in files)
-            {
-                if (!File.Exists(file)) continue;
-                string text = File.ReadAllText(file, Encoding.UTF8);
-                foreach (string field in new[] { "pid", "childPid" })
-                {
-                    Match match = Regex.Match(text, "\"" + field + "\"\\s*:\\s*(\\d+)");
-                    if (!match.Success) continue;
-                    int pid;
-                    if (!int.TryParse(match.Groups[1].Value, out pid)) continue;
-                    try
-                    {
-                        Process process = Process.GetProcessById(pid);
-                        if (string.Equals(process.ProcessName, "node", StringComparison.OrdinalIgnoreCase))
-                        {
-                            process.Kill();
-                            process.WaitForExit(4000);
-                        }
-                    }
-                    catch { }
-                }
-                try { File.Delete(file); } catch { }
-            }
-        }
-        catch { }
-    }
-
-    private static void StopLauncher(string installDir)
-    {
-        try
-        {
-            string prefix = installDir.TrimEnd('\\') + "\\";
-            foreach (Process process in Process.GetProcessesByName("kanmod"))
-            {
-                try
-                {
-                    string path = process.MainModule.FileName;
-                    if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        process.Kill();
-                        process.WaitForExit(3000);
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
+        InstallerCore.StopProcessesForInstall(Log, targetDir, LegacyInstallDir());
+        InstallerCore.StopServerFromData(DataDirFor(targetDir), Log);
+        InstallerCore.StopServerFromData(LegacyDataDir(), Log);
     }
 
     private static void CreateShortcut(string linkPath, string targetPath, string workingDir)

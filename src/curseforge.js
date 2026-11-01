@@ -35,7 +35,7 @@ export async function curseforgeRequest(pathname, { apiKey, query = {}, fetchImp
       headers: {
         'x-api-key': apiKey,
         Accept: 'application/json',
-        'User-Agent': 'kanmod/0.0.71',
+        'User-Agent': 'kanmod/0.0.72',
       },
       signal: AbortSignal.timeout(timeoutMs),
     });

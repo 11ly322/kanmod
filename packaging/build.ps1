@@ -1,6 +1,6 @@
 param(
   [string]$NodeExe = "",
-  [string]$Version = "0.0.71"
+  [string]$Version = "0.0.72"
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,6 +18,8 @@ $csc = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if (-not (Test-Path $csc)) {
   throw "csc.exe not found: $csc"
 }
+$manifest = Join-Path $PSScriptRoot "app.manifest"
+$installerCore = Join-Path $PSScriptRoot "InstallerCore.cs"
 
 $build = Join-Path $root ".artifacts\build"
 $payload = Join-Path $build "payload"
@@ -34,21 +36,21 @@ if (Test-Path $nodeLicense) {
 
 $launcher = Join-Path $build "kanmod.exe"
 $icon = Join-Path $PSScriptRoot "kanmod.ico"
-& $csc /nologo /target:winexe /codepage:65001 "/out:$launcher" "/win32icon:$icon" `
+& $csc /nologo /target:winexe /codepage:65001 "/out:$launcher" "/win32icon:$icon" "/win32manifest:$manifest" `
   /reference:System.dll /reference:System.Core.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
   (Join-Path $PSScriptRoot "KanmodLauncher.cs")
 if ($LASTEXITCODE -ne 0) { throw "launcher compile failed" }
 Copy-Item $launcher (Join-Path $payload "kanmod.exe")
 
 $uninstaller = Join-Path $build "uninstall.exe"
-& $csc /nologo /target:winexe /codepage:65001 "/out:$uninstaller" "/win32icon:$icon" `
+& $csc /nologo /target:winexe /codepage:65001 "/out:$uninstaller" "/win32icon:$icon" "/win32manifest:$manifest" `
   /reference:System.dll /reference:System.Core.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
-  (Join-Path $PSScriptRoot "KanmodUninstaller.cs")
+  $installerCore (Join-Path $PSScriptRoot "KanmodUninstaller.cs")
 if ($LASTEXITCODE -ne 0) { throw "uninstaller compile failed" }
 Copy-Item $uninstaller (Join-Path $payload "uninstall.exe")
 
 $updater = Join-Path $build "kanmod-update.exe"
-& $csc /nologo /target:winexe /codepage:65001 "/out:$updater" "/win32icon:$icon" `
+& $csc /nologo /target:winexe /codepage:65001 "/out:$updater" "/win32icon:$icon" "/win32manifest:$manifest" `
   /reference:System.dll /reference:System.Core.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll `
   (Join-Path $PSScriptRoot "KanmodUpdater.cs")
 if ($LASTEXITCODE -ne 0) { throw "updater compile failed" }
@@ -58,10 +60,10 @@ $zip = Join-Path $build "payload.zip"
 Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $zip -CompressionLevel Optimal
 
 $setup = Join-Path $build "kanmod-setup-$Version.exe"
-& $csc /nologo /target:winexe /codepage:65001 "/out:$setup" "/win32icon:$icon" `
+& $csc /nologo /target:winexe /codepage:65001 "/out:$setup" "/win32icon:$icon" "/win32manifest:$manifest" `
   /reference:System.dll /reference:System.Core.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
   /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /reference:Microsoft.CSharp.dll `
-  "/resource:$zip,payload.zip" (Join-Path $PSScriptRoot "KanmodSetup.cs")
+  "/resource:$zip,payload.zip" $installerCore (Join-Path $PSScriptRoot "KanmodSetup.cs")
 if ($LASTEXITCODE -ne 0) { throw "setup compile failed" }
 
 Write-Host "Built: $setup"

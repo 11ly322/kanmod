@@ -390,7 +390,7 @@ function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.0.71')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.0.72')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -1435,7 +1435,7 @@ function settingsHtml() {
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.71')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.72')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1450,7 +1450,7 @@ function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.0.71')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.0.72')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>

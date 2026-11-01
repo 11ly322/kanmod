@@ -1,21 +1,21 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using Kanmod.Installer;
 
 [assembly: System.Reflection.AssemblyTitle("kanmod uninstaller")]
 [assembly: System.Reflection.AssemblyProduct("kanmod")]
 [assembly: System.Reflection.AssemblyDescription("kanmod uninstaller")]
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
-[assembly: System.Reflection.AssemblyVersion("0.0.71.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.0.71.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.0.71")]
+[assembly: System.Reflection.AssemblyVersion("0.0.72.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.0.72.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.0.72")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.0.71";
+    private const string AppVersion = "0.0.72";
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\kanmod";
 
     [STAThread]
@@ -47,9 +47,11 @@ internal static class Program
 
         try
         {
-            StopInstallNodes(installDir);
-            StopServer(Path.Combine(installDir, "data"));
-            StopLauncher(installDir);
+            InstallerCore.StopProcessesForInstall(delegate(string message) { }, installDir);
+            InstallerCore.StopServerFromData(Path.Combine(installDir, "data"), delegate(string message) { });
+            // Restore a user-owned ACL so the deferred rmdir is not blocked by a
+            // folder created by an older elevated setup.
+            InstallerCore.EnsureUserAccess(installDir, delegate(string message) { });
             RemoveRegistry();
             RemoveShortcuts();
             ScheduleDelete(installDir);
@@ -67,82 +69,6 @@ internal static class Program
         foreach (string arg in args)
             if (string.Equals(arg, name, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
-    }
-
-    private static void StopInstallNodes(string installDir)
-    {
-        try
-        {
-            string prefix = Path.GetFullPath(installDir).TrimEnd('\\') + "\\";
-            foreach (Process process in Process.GetProcessesByName("node"))
-            {
-                try
-                {
-                    string path = process.MainModule.FileName;
-                    if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        process.Kill();
-                        process.WaitForExit(3000);
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-    }
-
-    private static void StopServer(string dataDir)
-    {
-        string[] files =
-        {
-            Path.Combine(dataDir, "supervisor.json"),
-            Path.Combine(dataDir, "runtime.json")
-        };
-        foreach (string file in files)
-        {
-            try
-            {
-                if (!File.Exists(file)) continue;
-                string text = File.ReadAllText(file);
-                foreach (string field in new[] { "pid", "childPid" })
-                {
-                    Match match = Regex.Match(text, "\"" + field + "\"\\s*:\\s*(\\d+)");
-                    if (!match.Success) continue;
-                    int pid;
-                    if (!int.TryParse(match.Groups[1].Value, out pid)) continue;
-                    try
-                    {
-                        Process process = Process.GetProcessById(pid);
-                        if (string.Equals(process.ProcessName, "node", StringComparison.OrdinalIgnoreCase))
-                        {
-                            process.Kill();
-                            process.WaitForExit(4000);
-                        }
-                    }
-                    catch { }
-                }
-                try { File.Delete(file); } catch { }
-            }
-            catch { }
-        }
-    }
-
-    private static void StopLauncher(string installDir)
-    {
-        string prefix = installDir.TrimEnd('\\') + "\\";
-        foreach (Process process in Process.GetProcessesByName("kanmod"))
-        {
-            try
-            {
-                string path = process.MainModule.FileName;
-                if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    process.Kill();
-                    process.WaitForExit(3000);
-                }
-            }
-            catch { }
-        }
     }
 
     private static void RemoveRegistry()

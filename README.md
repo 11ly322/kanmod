@@ -4,7 +4,7 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.0.71-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.0.72-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -33,7 +33,7 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.71.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.0.72.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
 默认安装位置  第一个非 C 盘的 \Programs\kanmod（可在安装器里修改）
@@ -44,6 +44,8 @@
 ```
 
 安装包自带 Node.js 运行时，不会修改系统环境变量。**程序、模组数据、缓存、备份和回收站都在安装目录内**；默认优先选择非 C 盘，卸载程序会停止服务并删除整个安装目录，C 盘不会留下用户数据。
+
+安装器使用 `asInvoker` 清单，不会请求管理员权限；安装目录及其中的文件归当前 Windows 用户所有。覆盖安装会先结束旧的 kanmod 守护/启动/更新进程，再替换程序文件，并保留 `data` 目录。若目录仍被其他程序占用，安装器会短暂重试并给出明确提示，不会把整个分区改成管理员所有。
 
 从 0.0.3 升级时，旧数据会从 `%LOCALAPPDATA%\kanmod\data` 自动迁移到新安装目录，迁移成功后清理旧目录。
 
@@ -143,7 +145,7 @@ test/                Node 内置测试
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.0.71.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
+产物位于 `.artifacts/build/kanmod-setup-0.0.72.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
 
 ## 已知限制
 
