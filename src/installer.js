@@ -247,7 +247,10 @@ function buildMappings(entries, pkg, onProgress = () => {}) {
   const byTarget = new Map();
   const unknown = [];
   for (const directive of directives) {
-    if (!directive || (!directive.file && !directive.find && !directive.find_regexp)) continue;
+    // A directive may be fully synthetic (inferred GameData squash) and carry its
+    // selection in `_entries`; only reject one that has no source at all.
+    if (!directive) continue;
+    if (!directive._entries && !directive.file && !directive.find && !directive.find_regexp) continue;
     let selected;
     if (directive._entries) {
       selected = { kind: 'dir', root: directive._stripPrefix, entries: directive._entries };

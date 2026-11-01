@@ -298,7 +298,7 @@ export function libraryHtml() {
       <label class="search">
         <span class="sr-only">搜索模组</span>
         ${icon('search', 15)}
-        <input id="library-q" name="q" type="search" value="${esc(lib.q)}" placeholder="${isCf ? '搜索 CurseForge 项目名、作者…' : '搜索模组名、标识、作者或标签…'}" autocomplete="off">
+        <input id="library-q" name="q" type="search" value="${esc(lib.q)}" placeholder="${isCf ? '粘贴 CurseForge 项目链接 / slug，或输入关键词（需 API Key）' : '搜索模组名、标识、作者或标签…'}" autocomplete="off">
       </label>
       ${isCf ? '' : `<div class="seg" role="group" aria-label="筛选">
         ${statuses.map(([id, label]) => `<button type="button" class="${lib.status === id ? 'active' : ''}" data-action="library-status" data-status="${id}">${label}</button>`).join('')}
@@ -315,7 +315,7 @@ export function libraryHtml() {
       </select>
       <button class="btn primary" type="submit" ${isCf && cf.loading ? 'disabled' : ''}>${icon('search', 14)}搜索</button>
     </form>
-    ${isCf && cf.data?.needsKey ? `<div class="notice warn">${icon('key', 18)}<div><strong>需要 CurseForge API Key。</strong> 在设置中填写后即可检索 Forge 项目与图片。</div></div>` : ''}
+    ${isCf && cf.data?.needsKey ? `<div class="notice warn">${icon('key', 18)}<div><strong>免 Key 模式：</strong> 可以直接粘贴 CurseForge 项目链接、slug 或数字 ID 查询并查看文件与下载；关键词搜索需要在设置中填写 API Key。</div></div>` : ''}
     <div id="library-body">${libraryBodyHtml()}</div>`;
 }
 
@@ -329,10 +329,10 @@ export function curseforgeBodyHtml() {
   }
   if (!data) {
     if (cf.loading) return skeletonCards(6);
-    return `<div class="empty"><div class="empty-icon">${icon('box')}</div><strong>从 CurseForge 开始检索</strong><p>输入关键词，或直接搜索查看热门 KSP 项目。</p><button class="btn primary" type="button" data-action="search-curseforge">浏览热门项目</button></div>`;
+    return `<div class="empty"><div class="empty-icon">${icon('box')}</div><strong>从 CurseForge 开始</strong><p>把 CurseForge 项目链接粘贴到上方搜索框即可查询；配置 API Key 后支持关键词搜索。</p><button class="btn primary" type="button" data-action="search-curseforge">浏览热门项目</button></div>`;
   }
   if (data.needsKey) {
-    return `<div class="empty"><div class="empty-icon">${icon('key')}</div><strong>还没有配置 CurseForge API Key</strong><p>${esc(data.message || '在设置中填写 API Key 后即可检索。')}</p><button class="btn primary" type="button" data-action="navigate" data-view="settings">前往设置</button></div>`;
+    return `<div class="empty"><div class="empty-icon">${icon('key')}</div><strong>免 Key 查询模式</strong><p>${esc(data.message || '粘贴 CurseForge 项目链接、slug 或数字 ID 即可查询。')}</p><p class="text-muted">示例：https://www.curseforge.com/kerbal/ksp-mods/a-steampunk-mod 或 248613</p><button class="btn ghost" type="button" data-action="navigate" data-view="settings">${icon('key', 14)}配置 API Key 以启用搜索</button></div>`;
   }
   const items = data.items || [];
   if (!items.length) {
@@ -521,7 +521,8 @@ export function modPageHtml() {
       </div>
       <div class="head-aside">
         ${isCf
-          ? `<a class="btn primary" href="${esc(pkg.resources?.homepage || pkg.curseforge?.url || 'https://www.curseforge.com/kerbal-space-program')}" target="_blank" rel="noreferrer">${icon('link', 15)}在 CurseForge 打开</a>`
+          ? `<a class="btn primary" href="${esc(pkg.resources?.homepage || pkg.curseforge?.url || 'https://www.curseforge.com/kerbal-space-program')}" target="_blank" rel="noreferrer">${icon('link', 15)}在 CurseForge 打开</a>
+             ${data.latestDownloadUrl ? `<a class="btn ghost" href="${esc(data.latestDownloadUrl)}" target="_blank" rel="noreferrer">${icon('download', 15)}下载最新文件</a>` : ''}`
           : `<button class="btn primary" type="button" data-action="plan-install" data-id="${esc(pkg.identifier)}" data-version="${esc(pkg.version)}">${icon('download', 15)}${installed ? '查看安装计划' : '安装模组'}</button>`}
       </div>
     </div>
@@ -1025,7 +1026,7 @@ export function settingsHtml() {
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.4')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.5-alpha')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1040,7 +1041,7 @@ export function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.1.4')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.1.5-alpha')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>

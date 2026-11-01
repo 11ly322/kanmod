@@ -7,7 +7,8 @@ import { downloadBuffer } from '../../catalog/loader.js';
 import { checkKspCompatibility } from '../../util/version.js';
 import { tagTranslations, translateTag } from '../../tagTranslations.js';
 import { fetchImageBuffer } from '../../modImages.js';
-import { searchCurseForge, curseforgeRequest, curseforgeConfigured, mapCurseForgeDetail, CurseForgeError } from '../../curseforge.js';
+import { searchCurseForge, curseforgeRequest, curseforgeConfigured, mapCurseForgeDetail, mapCurseForgeMod, CurseForgeError } from '../../curseforge.js';
+import { fetchPublicProject, toCurseForgeMod, PublicCurseForgeError } from '../../curseforgePublic.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -19,13 +20,37 @@ router.get('/api/catalog/status', async (req, res, context, url) => {
 router.get('/api/curseforge/search', async (req, res, context, url) => {
     const config = context.configStore.get();
     if (!curseforgeConfigured(config)) {
+      const pageSize = Number(url.searchParams.get('pageSize')) || config.ui.pageSize;
+      const query = String(url.searchParams.get('q') || '').trim();
+      let kspVersion = null;
+      try {
+        const runtime = await getRuntime(context);
+        kspVersion = runtime.scan.kspVersion || runtime.info.version || null;
+      } catch {
+        // 没有实例时也能按链接查询项目。
+      }
+      const items = [];
+      let message = '未配置 CurseForge API Key。可以直接粘贴 CurseForge 项目链接、slug 或数字 ID 查询，免 Key 模式不支持关键词搜索。';
+      if (query) {
+        try {
+          const project = await fetchPublicProject(query);
+          items.push(mapCurseForgeMod(toCurseForgeMod(project), { kspVersion }));
+          message = '免 Key 模式按项目链接 / slug / ID 精确查询，不支持关键词搜索。';
+        } catch (error) {
+          if (!(error instanceof PublicCurseForgeError)) throw error;
+          message = error.message;
+        }
+      }
       return sendJson(res, 200, {
         needsKey: true,
-        items: [],
-        total: 0,
+        public: true,
+        items,
+        total: items.length,
         page: 1,
-        pageSize: Number(url.searchParams.get('pageSize')) || config.ui.pageSize,
-        message: '在设置中填写 CurseForge API Key 后即可检索 Forge 项目。',
+        pageSize,
+        pageCount: 1,
+        kspVersion,
+        message,
       });
     }
     let kspVersion = null;
@@ -58,10 +83,6 @@ router.get('/api/curseforge/search', async (req, res, context, url) => {
 
 router.get(/^\/api\/curseforge\/mod\/(\d+)$/, async (req, res, context, url, match) => {
     const config = context.configStore.get();
-    if (!curseforgeConfigured(config)) {
-      throw new CurseForgeError('尚未配置 CurseForge API Key，请在设置中填写。', 'CURSEFORGE_KEY_MISSING');
-    }
-    const apiKey = config.curseforgeApiKey;
     const id = match[1];
     let kspVersion = null;
     try {
@@ -70,6 +91,17 @@ router.get(/^\/api\/curseforge\/mod\/(\d+)$/, async (req, res, context, url, mat
     } catch {
       // Detail can still be viewed without an instance.
     }
+    if (!curseforgeConfigured(config)) {
+      const project = await fetchPublicProject(id);
+      const data = mapCurseForgeDetail(toCurseForgeMod(project), { kspVersion, description: project.description, screenshots: [] });
+      return sendJson(res, 200, {
+        ...data,
+        public: true,
+        downloads: project.downloads,
+        latestDownloadUrl: project.latest?.downloadUrl || null,
+      });
+    }
+    const apiKey = config.curseforgeApiKey;
     const [mod, description, screenshots] = await Promise.all([
       curseforgeRequest(`/mods/${id}`, { apiKey }),
       curseforgeRequest(`/mods/${id}/description`, { apiKey }).catch(() => ''),

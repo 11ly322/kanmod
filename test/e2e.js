@@ -173,6 +173,11 @@ async function main() {
     const preview = await api(token, '/api/modpack/preview', { method: 'POST', body: { depends: [{ name: 'KSPCommunityFixes' }] } });
     check('modpack preview', preview.status === 200 && preview.json?.plan?.ok === true);
 
+    // CurseForge without an API key: ref parsing is local, so this stays offline-safe.
+    const cfNoKey = await api(token, '/api/curseforge/search?q=not%20a%20valid%20ref');
+    check('curseforge keyless mode', cfNoKey.status === 200 && cfNoKey.json?.needsKey === true && cfNoKey.json?.public === true);
+    check('curseforge keyless rejects bad ref', cfNoKey.json?.items?.length === 0 && /slug|链接/.test(String(cfNoKey.json?.message || '')));
+
     // mods batch validation
     const badBatch = await api(token, '/api/mods/batch', { method: 'POST', body: { action: 'explode', identifiers: ['ModuleManager'] } });
     check('batch invalid action', badBatch.status === 400 && badBatch.json?.error?.code === 'BATCH_ACTION_INVALID');
