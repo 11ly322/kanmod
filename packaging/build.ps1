@@ -1,6 +1,6 @@
 param(
   [string]$NodeExe = "",
-  [string]$Version = "0.1.5-beta"
+  [string]$Version = "0.1.5"
 )
 
 $ErrorActionPreference = "Stop"

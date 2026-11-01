@@ -1024,9 +1024,9 @@ export function settingsHtml() {
           <div class="divider"></div>
           <div class="field">
             <label>应用更新</label>
-            <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
+            <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本（包含测试版）。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.5-beta')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.5')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1041,7 +1041,7 @@ export function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.1.5-beta')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.1.5')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>

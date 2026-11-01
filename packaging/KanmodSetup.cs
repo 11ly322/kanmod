@@ -16,11 +16,11 @@ using Kanmod.Installer;
 [assembly: AssemblyCompany("kanmod")]
 [assembly: AssemblyVersion("0.1.5.0")]
 [assembly: AssemblyFileVersion("0.1.5.0")]
-[assembly: AssemblyInformationalVersion("0.1.5-beta")]
+[assembly: AssemblyInformationalVersion("0.1.5")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.1.5-beta";
+    internal const string AppVersion = "0.1.5";
 
     [STAThread]
     private static int Main(string[] args)

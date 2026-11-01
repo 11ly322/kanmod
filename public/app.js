@@ -66,7 +66,7 @@ export function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.1.5-beta')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.1.5')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}

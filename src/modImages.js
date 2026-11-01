@@ -83,7 +83,7 @@ function timeoutSignal(ms) {
 
 async function fetchText(url, fetchImpl, timeoutMs, headers = {}) {
   const response = await fetchImpl(url, {
-    headers: { 'user-agent': 'kanmod/0.1.5-beta', ...headers },
+    headers: { 'user-agent': 'kanmod/0.1.5', ...headers },
     signal: timeoutSignal(timeoutMs),
   });
   if (!response.ok) return null;
@@ -211,7 +211,7 @@ export async function fetchImageBuffer(url, {
   }
   const response = await fetchImpl(url, {
     redirect: 'follow',
-    headers: { 'user-agent': 'kanmod/0.1.5-beta', accept: 'image/png,image/jpeg,image/webp,image/gif' },
+    headers: { 'user-agent': 'kanmod/0.1.5', accept: 'image/png,image/jpeg,image/webp,image/gif' },
     signal: timeoutSignal(timeoutMs),
   });
   if (!response.ok) {

@@ -15,7 +15,7 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
 [assembly: System.Reflection.AssemblyVersion("0.1.5.0")]
 [assembly: System.Reflection.AssemblyFileVersion("0.1.5.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.5-beta")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.5")]
 
 internal static class Program
 {
@@ -75,7 +75,7 @@ internal static class Program
         }
 
         var request = (HttpWebRequest)WebRequest.Create(release.AssetUrl);
-        request.UserAgent = "kanmod-updater/0.1.5-beta";
+        request.UserAgent = "kanmod-updater/0.1.5";
         request.Proxy = null;
         request.Timeout = 30000;
         using (var response = (HttpWebResponse)request.GetResponse())
@@ -145,10 +145,20 @@ internal sealed class ReleaseInfo
         try
         {
             string file = Path.Combine(installDir, "install.json");
-            if (!File.Exists(file)) return "0.0.0";
-            string text = File.ReadAllText(file, Encoding.UTF8);
-            System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(text, "\"version\"\\s*:\\s*\"([^\"]+)\"");
-            return match.Success ? match.Groups[1].Value : "0.0.0";
+            if (File.Exists(file))
+            {
+                string text = File.ReadAllText(file, Encoding.UTF8);
+                System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(text, "\"version\"\\s*:\\s*\"([^\"]+)\"");
+                if (match.Success) return match.Groups[1].Value;
+            }
+            string pkg = Path.Combine(installDir, "package.json");
+            if (File.Exists(pkg))
+            {
+                string text = File.ReadAllText(pkg, Encoding.UTF8);
+                System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(text, "\"version\"\\s*:\\s*\"([^\"]+)\"");
+                if (match.Success) return match.Groups[1].Value;
+            }
+            return "0.0.0";
         }
         catch
         {
@@ -159,28 +169,63 @@ internal sealed class ReleaseInfo
     internal static ReleaseInfo LoadLatest()
     {
         string feed = Environment.GetEnvironmentVariable("KANMOD_UPDATE_FEED");
-        string json;
         if (!string.IsNullOrEmpty(feed))
         {
-            if (feed.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                json = Get(feed);
-            else
-                json = File.ReadAllText(feed, Encoding.UTF8);
-        }
-        else
-        {
-            json = Get("https://api.github.com/repos/" + Program.Repo + "/releases/latest");
+            string json = feed.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? Get(feed)
+                : File.ReadAllText(feed, Encoding.UTF8);
+            return ParseReleases(json);
         }
 
+        // The /releases/latest endpoint never returns prereleases, so a user on a
+        // beta could never see the next beta. Read the release list and pick the
+        // highest version ourselves.
+        try
+        {
+            return ParseReleases(Get("https://api.github.com/repos/" + Program.Repo + "/releases?per_page=15"));
+        }
+        catch
+        {
+            return ParseReleases(Get("https://api.github.com/repos/" + Program.Repo + "/releases/latest"));
+        }
+    }
+
+    private static ReleaseInfo ParseReleases(string json)
+    {
         var serializer = new JavaScriptSerializer();
-        var root = serializer.Deserialize<Dictionary<string, object>>(json);
+        object parsed = serializer.DeserializeObject(json);
+        var items = parsed as object[];
+        if (items == null) items = new[] { parsed };
+
+        ReleaseInfo best = null;
+        foreach (object item in items)
+        {
+            var root = item as Dictionary<string, object>;
+            if (root == null) continue;
+            object draft;
+            if (root.TryGetValue("draft", out draft) && draft is bool && (bool)draft) continue;
+            ReleaseInfo candidate = FromRelease(root);
+            if (candidate == null) continue;
+            if (best == null || Compare(candidate.Version, best.Version) > 0) best = candidate;
+        }
+        if (best == null || string.IsNullOrEmpty(best.AssetUrl))
+            throw new InvalidDataException("发布信息中没有找到安装包。");
+        return best;
+    }
+
+    private static ReleaseInfo FromRelease(Dictionary<string, object> root)
+    {
         var release = new ReleaseInfo();
         release.Version = Text(root, "tag_name").TrimStart('v', 'V');
         release.PageUrl = Text(root, "html_url");
         release.Notes = Text(root, "body");
+        if (string.IsNullOrEmpty(release.Version)) return null;
+
         object assetsValue;
         if (root.TryGetValue("assets", out assetsValue) && assetsValue is IEnumerable)
         {
+            Dictionary<string, object> matched = null;
+            Dictionary<string, object> fallback = null;
             foreach (object item in (IEnumerable)assetsValue)
             {
                 var asset = item as Dictionary<string, object>;
@@ -188,21 +233,29 @@ internal sealed class ReleaseInfo
                 string name = Text(asset, "name");
                 if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
                 if (name.IndexOf("setup", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                release.AssetUrl = Text(asset, "browser_download_url");
+                if (fallback == null) fallback = asset;
+                if (name.IndexOf(release.Version, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    matched = asset;
+                    break;
+                }
+            }
+            Dictionary<string, object> chosen = matched ?? fallback;
+            if (chosen != null)
+            {
+                release.AssetUrl = Text(chosen, "browser_download_url");
                 object size;
-                if (asset.TryGetValue("size", out size)) long.TryParse(Convert.ToString(size), out release.AssetSize);
-                break;
+                if (chosen.TryGetValue("size", out size)) long.TryParse(Convert.ToString(size), out release.AssetSize);
             }
         }
-        if (string.IsNullOrEmpty(release.Version) || string.IsNullOrEmpty(release.AssetUrl))
-            throw new InvalidDataException("发布信息中没有找到安装包。");
+        if (string.IsNullOrEmpty(release.AssetUrl)) return null;
         return release;
     }
 
     private static string Get(string url)
     {
         var request = (HttpWebRequest)WebRequest.Create(url);
-        request.UserAgent = "kanmod-updater/0.1.5-beta";
+        request.UserAgent = "kanmod-updater/0.1.5";
         request.Accept = "application/vnd.github+json";
         request.Proxy = null;
         request.Timeout = 15000;
@@ -219,8 +272,16 @@ internal sealed class ReleaseInfo
 
     internal static int Compare(string left, string right)
     {
-        string[] a = (left ?? "").TrimStart('v', 'V').Split('-')[0].Split('.');
-        string[] b = (right ?? "").TrimStart('v', 'V').Split('-')[0].Split('.');
+        string l = (left ?? "").Trim().TrimStart('v', 'V');
+        string r = (right ?? "").Trim().TrimStart('v', 'V');
+        string lCore = l, rCore = r, lPre = "", rPre = "";
+        int dash = l.IndexOf('-');
+        if (dash >= 0) { lCore = l.Substring(0, dash); lPre = l.Substring(dash + 1); }
+        dash = r.IndexOf('-');
+        if (dash >= 0) { rCore = r.Substring(0, dash); rPre = r.Substring(dash + 1); }
+
+        string[] a = lCore.Split('.');
+        string[] b = rCore.Split('.');
         for (int i = 0; i < Math.Max(a.Length, b.Length); i++)
         {
             int x, y;
@@ -228,7 +289,35 @@ internal sealed class ReleaseInfo
             int.TryParse(i < b.Length ? b[i] : "0", out y);
             if (x != y) return x > y ? 1 : -1;
         }
-        return 0;
+
+        // 0.1.5 > 0.1.5，0.1.5 > 0.1.5-alpha。
+        if (lPre.Length == 0 && rPre.Length == 0) return 0;
+        if (lPre.Length == 0) return 1;
+        if (rPre.Length == 0) return -1;
+        return ComparePrerelease(lPre, rPre);
+    }
+
+    private static int ComparePrerelease(string left, string right)
+    {
+        string[] a = left.Split('.');
+        string[] b = right.Split('.');
+        for (int i = 0; i < Math.Min(a.Length, b.Length); i++)
+        {
+            int x, y;
+            bool aNumber = int.TryParse(a[i], out x);
+            bool bNumber = int.TryParse(b[i], out y);
+            if (aNumber && bNumber)
+            {
+                if (x != y) return x > y ? 1 : -1;
+                continue;
+            }
+            if (aNumber) return -1;
+            if (bNumber) return 1;
+            int text = string.Compare(a[i], b[i], StringComparison.OrdinalIgnoreCase);
+            if (text != 0) return text > 0 ? 1 : -1;
+        }
+        if (a.Length == b.Length) return 0;
+        return a.Length > b.Length ? 1 : -1;
     }
 }
 
@@ -331,7 +420,7 @@ internal sealed class UpdateForm : Form
             _release = release;
             Invoke((Action)(() =>
             {
-                _version.Text = "当前版本 " + current + "  ·  最新版本 " + release.Version;
+                _version.Text = "当前版本 " + current + "  ·  最新版本 " + release.Version + (release.Version.IndexOf('-') >= 0 ? "（测试版）" : "");
                 if (release.HasUpdate(_installDir))
                 {
                     _status.Text = "发现新版本 " + release.Version + "。更新会保留游戏模组与数据。\r\n" + FirstLine(release.Notes);
@@ -343,7 +432,6 @@ internal sealed class UpdateForm : Form
                     _status.Text = "已经是最新版本。";
                     _action.Text = "重新检查";
                     _action.Enabled = true;
-                    _action.Click += (sender, args) => ThreadPool.QueueUserWorkItem((state) => Check());
                 }
             }));
         }
@@ -354,7 +442,6 @@ internal sealed class UpdateForm : Form
                 _status.Text = "检查更新失败：" + ex.Message;
                 _action.Text = "重试";
                 _action.Enabled = true;
-                _action.Click += (sender, args) => ThreadPool.QueueUserWorkItem((state) => Check());
             }));
         }
     }
