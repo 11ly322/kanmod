@@ -1,6 +1,6 @@
 param(
   [string]$NodeExe = "",
-  [string]$Version = "0.0.5"
+  [string]$Version = "0.0.6"
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +46,13 @@ $uninstaller = Join-Path $build "uninstall.exe"
   (Join-Path $PSScriptRoot "KanmodUninstaller.cs")
 if ($LASTEXITCODE -ne 0) { throw "uninstaller compile failed" }
 Copy-Item $uninstaller (Join-Path $payload "uninstall.exe")
+
+$updater = Join-Path $build "kanmod-update.exe"
+& $csc /nologo /target:winexe /codepage:65001 "/out:$updater" "/win32icon:$icon" `
+  /reference:System.dll /reference:System.Core.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll `
+  (Join-Path $PSScriptRoot "KanmodUpdater.cs")
+if ($LASTEXITCODE -ne 0) { throw "updater compile failed" }
+Copy-Item $updater (Join-Path $payload "kanmod-update.exe")
 
 $zip = Join-Path $build "payload.zip"
 Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $zip -CompressionLevel Optimal

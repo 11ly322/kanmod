@@ -5,6 +5,8 @@ const state = {
     q: '',
     status: 'all',
     sort: 'relevance',
+    tag: '',
+    size: '',
     page: 1,
     pageSize: 24,
     data: null,
@@ -13,6 +15,7 @@ const state = {
   },
   installed: null,
   installedLoading: false,
+  installedFilter: 'all',
   batchMode: false,
   diagnostics: null,
   diagnosticsLoading: false,
@@ -80,6 +83,7 @@ const ICONS = {
   file: '<path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
   book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M4 19a2.5 2.5 0 0 1 2.5-2.5H20"/><path d="M8 7h8M8 11h6"/>',
   translate: '<path d="M4 5h9M8.5 3v2M6 5c.6 3.2 2.7 5.5 5.5 6.7M11.5 5C11 8.2 9 10.6 6 12"/><path d="m13 20 4-9 4 9M14.6 17h4.8"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/>',
 };
 
 function icon(name, size = 18) {
@@ -381,7 +385,7 @@ function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.0.5')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.0.6')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -719,6 +723,13 @@ function libraryHtml() {
       <div class="seg" role="group" aria-label="筛选">
         ${statuses.map(([id, label]) => `<button type="button" class="${lib.status === id ? 'active' : ''}" data-action="library-status" data-status="${id}">${label}</button>`).join('')}
       </div>
+      <select id="library-tag" class="select" aria-label="按标签筛选">
+        <option value="">全部标签</option>
+        ${(lib.data?.facets?.tags || []).map((facet) => `<option value="${esc(facet.tag)}" ${lib.tag === facet.tag ? 'selected' : ''}>${esc(facet.tag)} · ${fmtNumber(facet.count)}</option>`).join('')}
+      </select>
+      <select id="library-size" class="select" aria-label="按下载体积筛选">
+        ${[['', '全部大小'], ['small', '小于 1 MB'], ['medium', '1–20 MB'], ['large', '大于 20 MB']].map(([id, label]) => `<option value="${id}" ${lib.size === id ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
       <select id="library-sort" class="select" aria-label="排序">
         ${[['relevance', '相关度'], ['name', '名称'], ['size', '体积'], ['version', '版本']].map(([id, label]) => `<option value="${id}" ${lib.sort === id ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
@@ -781,20 +792,30 @@ function installedHtml() {
   const scan = data?.scan || state.bootstrap.scan;
   if (!state.bootstrap.instance) return openOnboarding();
   if (state.installedLoading && !data) return `<div class="page-head"><div><h2>已安装</h2><p>正在扫描 GameData…</p></div></div>${skeletonRows(5)}`;
-  const entries = data?.installed || scan?.entries || [];
+  const allEntries = data?.installed || scan?.entries || [];
   const disabled = data?.disabled || [];
   const updates = data?.updates || [];
   const records = data?.records || [];
-  const broken = records.filter((record) => !entries.some((entry) => shortId(entry.identifier) === shortId(record.identifier)));
+  const filter = state.installedFilter || 'all';
+  const entries = allEntries.filter((entry) => {
+    if (filter === 'updates') return entry.updateAvailable;
+    if (filter === 'disabled') return entry.disabled;
+    if (filter === 'manual') return !entry.managed || entry.managedBy === 'manual';
+    return true;
+  });
+  const broken = records.filter((record) => !allEntries.some((entry) => shortId(entry.identifier) === shortId(record.identifier)));
   return `
     <div class="page-head">
-      <div><h2>已安装模组</h2><p>扫描到 ${fmtNumber(entries.length)} 个模组条目${disabled.length ? `，其中 ${disabled.length} 个已禁用` : ''}。禁用会把整个模组移出 GameData；删除会先移入回收站。</p></div>
+      <div><h2>已安装模组</h2><p>扫描到 ${fmtNumber(allEntries.length)} 个模组条目${disabled.length ? `，其中 ${disabled.length} 个已禁用` : ''}。禁用会把整个模组移出 GameData；删除会先移入回收站。</p></div>
       <div class="head-aside">
         ${updates.length ? `<button class="btn primary" type="button" data-action="open-updates">${icon('refresh', 15)}快捷更新 ${updates.length}</button>` : ''}
         <button class="btn ${state.batchMode ? 'soft' : 'ghost'}" type="button" data-action="toggle-batch">${icon('check', 15)}${state.batchMode ? '退出批量' : '批量管理'}</button>
         <button class="btn ghost" type="button" data-action="open-folder" data-target="gamedata">${icon('folder', 15)}GameData</button>
         <button class="btn ghost" type="button" data-action="refresh-scan">${icon('refresh', 15)}重新扫描</button>
       </div>
+    </div>
+    <div class="seg installed-filters" role="group" aria-label="筛选已安装模组">
+      ${[['all', `全部 ${allEntries.length}`], ['updates', `可更新 ${updates.length}`], ['disabled', `已禁用 ${disabled.length}`], ['manual', '手动安装']].map(([id, label]) => `<button type="button" class="${filter === id ? 'active' : ''}" data-action="installed-filter" data-filter="${id}">${label}</button>`).join('')}
     </div>
     ${state.batchMode ? `<div class="batch-bar" id="batch-bar">
       <label class="batch-check"><input type="checkbox" id="batch-all">全选</label>
@@ -809,7 +830,7 @@ function installedHtml() {
     ${broken.length ? `<div class="notice warn">${icon('alert', 18)}<div><strong>有 ${broken.length} 条安装记录在磁盘上找不到对应目录。</strong> 可能是手动删除或安装未完成。到问题诊断运行一次检查。</div></div>` : ''}
     ${scan?.duplicates?.length ? `<div class="notice red">${icon('alert', 18)}<div><strong>发现 ${scan.duplicates.length} 组重复 DLL。</strong> 重复程序集可能导致启动报错，请到问题诊断查看。</div></div>` : ''}
     <div class="card" style="margin-top:14px">
-      ${entries.length ? installedTable(entries, { batchMode: state.batchMode }) : `<div class="empty"><div class="empty-icon">${icon('layers')}</div><strong>GameData 里还没有模组</strong><p>安装第一个模组后，它会出现在这里。</p><button class="btn primary" type="button" data-action="navigate" data-view="library">浏览模组库</button></div>`}
+      ${entries.length ? installedTable(entries, { batchMode: state.batchMode }) : allEntries.length ? `<div class="empty"><div class="empty-icon">${icon('search')}</div><strong>当前筛选没有模组</strong><p>换一个筛选条件，或切回“全部”。</p><button class="btn ghost" type="button" data-action="installed-filter" data-filter="all">查看全部</button></div>` : `<div class="empty"><div class="empty-icon">${icon('layers')}</div><strong>GameData 里还没有模组</strong><p>安装第一个模组后，它会出现在这里。</p><button class="btn primary" type="button" data-action="navigate" data-view="library">浏览模组库</button></div>`}
     </div>`;
 }
 
@@ -859,6 +880,7 @@ function modPageHtml() {
           <p class="mod-page-abstract">${esc(abstract)}</p>
           ${translationCard('abstract', '自动翻译简介')}
         </section>
+        ${galleryHtml()}
         <section class="card mod-description-card">
           <div class="card-head"><h3>${icon('file', 15)}说明</h3>${description ? `<button class="btn ghost sm" type="button" data-action="translate-mod" data-field="description" data-force="1">${icon('translate', 14)}翻译全文</button>` : ''}</div>
           ${translationCard('description', '自动翻译完整说明')}
@@ -1319,6 +1341,13 @@ function settingsHtml() {
           <p class="section-desc">界面只保存轻量偏好，不包含账号信息。</p>
           <div class="field"><label for="pageSize">模组库每页数量</label><input id="pageSize" name="pageSize" type="number" min="6" max="96" value="${esc(ui.pageSize || 24)}"></div>
           ${switchRow('autoTranslate', '自动翻译模组简介', '打开模组简介时自动检索并翻译英文简介。机器翻译仅供参考，原文始终保留。', ui.autoTranslate !== false)}
+          <div class="divider"></div>
+          <div class="field">
+            <label>应用更新</label>
+            <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本。更新会保留游戏模组与数据。</span>
+          </div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.0.6')}。更新程序随安装器一起安装。</div>
+          <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div class="field"><label>数据目录</label><input type="text" value="${esc(s.dataDir || '')}" readonly></div>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="open-folder" data-target="data">${icon('folder', 14)}打开数据目录</button>
@@ -1327,7 +1356,7 @@ function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.0.5')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.0.6')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>
@@ -1335,6 +1364,27 @@ function settingsHtml() {
         <button class="btn primary" type="submit">${icon('check', 15)}保存设置</button>
       </div>
     </form>`;
+}
+
+async function checkAppUpdate(button) {
+  const status = document.getElementById('app-update-status');
+  if (button) button.disabled = true;
+  if (status) status.textContent = '正在启动更新程序…';
+  try {
+    await api('/api/app/update', { method: 'POST', body: {} });
+    if (status) status.innerHTML = `<span class="badge ok">更新程序已启动</span> 按更新窗口提示完成，完成后会重新启动 kanmod。`;
+    toast('更新程序已启动。', 'success');
+  } catch (error) {
+    const releaseUrl = error.data?.error?.details?.releaseUrl;
+    if (status) {
+      status.innerHTML = releaseUrl
+        ? `未找到本机更新程序。<a href="${esc(releaseUrl)}" target="_blank" rel="noreferrer">打开发布页下载新版安装器</a>。`
+        : esc(error.message);
+    }
+    toast(error.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function switchRow(name, title, description, checked) {
@@ -1367,6 +1417,8 @@ async function loadCatalog() {
     pageSize: String(state.library.pageSize),
     sort: state.library.sort,
     status: state.library.status,
+    tag: state.library.tag,
+    size: state.library.size,
   });
   try {
     const data = await api(`/api/catalog?${params.toString()}`);
@@ -1374,6 +1426,7 @@ async function loadCatalog() {
     state.library.page = data.page || state.library.page;
     state.library.pageSize = data.pageSize || state.library.pageSize;
     state.library.error = null;
+    updateLibraryFacets(data);
   } catch (error) {
     state.library.error = error.message;
   } finally {
@@ -1385,6 +1438,14 @@ async function loadCatalog() {
 function renderLibraryBody() {
   const body = document.getElementById('library-body');
   if (body) body.innerHTML = libraryBodyHtml();
+}
+
+function updateLibraryFacets(data) {
+  const select = document.getElementById('library-tag');
+  if (!select || !data?.facets?.tags) return;
+  const current = state.library.tag;
+  select.innerHTML = `<option value="">全部标签</option>${data.facets.tags.map((facet) => `<option value="${esc(facet.tag)}">${esc(facet.tag)} · ${fmtNumber(facet.count)}</option>`).join('')}`;
+  select.value = current;
 }
 
 async function loadJobs() {
@@ -1701,6 +1762,11 @@ function openUpdateManager() {
     <div class="modal-foot"><button class="btn ghost" type="button" data-action="close-modal">取消</button><button class="btn primary" type="button" data-action="update-selected">${icon('refresh', 14)}更新选中</button></div>`);
 }
 
+function setInstalledFilter(filter) {
+  state.installedFilter = ['all', 'updates', 'disabled', 'manual'].includes(filter) ? filter : 'all';
+  renderApp();
+}
+
 function toggleBatch() {
   state.batchMode = !state.batchMode;
   renderView();
@@ -1839,6 +1905,11 @@ async function openModPage(identifier, version = null) {
     translations: {},
     translationLoading: {},
     translationErrors: {},
+    images: [],
+    imagesLoading: false,
+    imagesError: null,
+    imagesMessage: null,
+    lightboxIndex: 0,
   };
   renderApp();
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -1860,6 +1931,7 @@ async function loadModPage(identifier, version = null) {
     token.version = data.package.version;
     token.loading = false;
     renderApp();
+    loadModImages().catch(() => {});
     const settings = state.bootstrap?.settings?.ui || {};
     const abstract = data.package.abstract || '';
     if (settings.autoTranslate !== false && abstract && !hasCjk(abstract) && !token.translations.abstract && !token.translationErrors.abstract) {
@@ -1871,6 +1943,93 @@ async function loadModPage(identifier, version = null) {
     token.error = error.message || '读取模组简介失败。';
     renderApp();
   }
+}
+
+async function loadModImages(force = false) {
+  const token = state.mod;
+  const pkg = token?.data?.package;
+  if (!token || !pkg || token.imagesLoading) return;
+  if (!force && (token.images.length || token.imagesError)) return;
+  token.imagesLoading = true;
+  token.imagesError = null;
+  renderApp();
+  try {
+    const params = new URLSearchParams({ identifier: pkg.identifier });
+    if (pkg.version) params.set('version', pkg.version);
+    const data = await api(`/api/images?${params.toString()}`);
+    if (state.mod !== token) return;
+    token.images = Array.isArray(data.images) ? data.images : [];
+    token.imagesMessage = data.message || null;
+  } catch (error) {
+    if (state.mod !== token) return;
+    token.images = [];
+    token.imagesError = error.message || '图片检索失败。';
+  } finally {
+    if (state.mod === token) {
+      token.imagesLoading = false;
+      renderApp();
+    }
+  }
+}
+
+function galleryHtml() {
+  const mod = state.mod;
+  if (!mod?.data) return '';
+  const images = mod.images || [];
+  const count = images.length;
+  let body = '';
+  if (mod.imagesLoading) {
+    body = `<div class="gallery-loading"><span class="spinner"></span><span>正在检索 SpaceDock、简介与 GitHub 图片…</span></div>`;
+  } else if (mod.imagesError) {
+    body = `<div class="gallery-empty"><span>${esc(mod.imagesError)}</span><button class="btn ghost sm" type="button" data-action="refresh-images">${icon('refresh', 13)}重试</button></div>`;
+  } else if (count) {
+    body = `<div class="mod-gallery ${count === 1 ? 'single' : ''}">${images.map((image, index) => `
+      <button class="gallery-item" type="button" data-action="open-image" data-index="${index}" aria-label="查看第 ${index + 1} 张图片">
+        <img src="${esc(image.proxyUrl || image.url)}" alt="${esc(pkgName())} 展示图 ${index + 1}" loading="lazy">
+      </button>`).join('')}
+    </div>`;
+  } else {
+    body = `<div class="gallery-empty"><span>${esc(mod.imagesMessage || '没有检索到可展示的图片。')}</span><button class="btn ghost sm" type="button" data-action="refresh-images">${icon('refresh', 13)}重新检索</button></div>`;
+  }
+  return `<section class="card mod-gallery-card">
+    <div class="card-head"><h3>${icon('image', 15)}图片</h3><div class="gallery-head-actions"><span class="text-muted">${count ? `${fmtNumber(count)} 张` : '自动检索'}</span><button class="btn ghost sm" type="button" data-action="refresh-images" ${mod.imagesLoading ? 'disabled' : ''}>${icon('refresh', 13)}刷新</button></div></div>
+    ${body}
+  </section>`;
+}
+
+function pkgName() {
+  return state.mod?.data?.package?.name || '模组';
+}
+
+function openLightbox(index = 0) {
+  const images = state.mod?.images || [];
+  if (!images.length) return;
+  state.mod.lightboxIndex = Math.max(0, Math.min(Number(index) || 0, images.length - 1));
+  setModalContent(lightboxHtml(), {});
+}
+
+function lightboxHtml() {
+  const mod = state.mod;
+  const images = mod?.images || [];
+  const index = Math.max(0, Math.min(mod?.lightboxIndex || 0, images.length - 1));
+  const image = images[index];
+  if (!image) return '';
+  return `<div class="modal-head"><div><span class="eyebrow">图片展示</span><h3>${esc(pkgName())}</h3></div><button class="btn icon ghost" type="button" data-action="close-modal" aria-label="关闭图片">${icon('x')}</button></div>
+    <div class="lightbox-stage"><img src="${esc(image.proxyUrl || image.url)}" alt="${esc(pkgName())} 展示图 ${index + 1}"></div>
+    <div class="modal-foot lightbox-foot">
+      <span class="text-muted">${index + 1} / ${images.length}</span>
+      <div class="lightbox-actions">
+        <button class="btn ghost sm" type="button" data-action="lightbox-step" data-step="-1" ${images.length < 2 ? 'disabled' : ''}>上一张</button>
+        <button class="btn ghost sm" type="button" data-action="lightbox-step" data-step="1" ${images.length < 2 ? 'disabled' : ''}>下一张</button>
+      </div>
+    </div>`;
+}
+
+function stepLightbox(step) {
+  const images = state.mod?.images || [];
+  if (images.length < 2) return;
+  state.mod.lightboxIndex = (state.mod.lightboxIndex + step + images.length) % images.length;
+  setModalContent(lightboxHtml(), {});
 }
 
 async function translateMod(field = 'abstract', force = false, { silent = false } = {}) {
@@ -2237,6 +2396,8 @@ function clearLibraryFilter() {
   state.library.q = '';
   state.library.status = 'all';
   state.library.sort = 'relevance';
+  state.library.tag = '';
+  state.library.size = '';
   state.library.page = 1;
   renderApp();
   loadCatalog();
@@ -2524,6 +2685,15 @@ function setupEvents() {
         case 'translate-mod':
           await translateMod(actionNode.dataset.field || 'abstract', actionNode.dataset.force === '1');
           break;
+        case 'refresh-images':
+          await loadModImages(true);
+          break;
+        case 'open-image':
+          openLightbox(Number(actionNode.dataset.index) || 0);
+          break;
+        case 'lightbox-step':
+          stepLightbox(Number(actionNode.dataset.step) || 0);
+          break;
         case 'select-version':
           await openMod(actionNode.dataset.id, actionNode.dataset.version || null);
           break;
@@ -2602,6 +2772,9 @@ function setupEvents() {
         case 'toggle-batch':
           toggleBatch();
           break;
+        case 'installed-filter':
+          setInstalledFilter(actionNode.dataset.filter || 'all');
+          break;
         case 'batch-disable':
           batchAction('disable');
           break;
@@ -2613,6 +2786,9 @@ function setupEvents() {
           break;
         case 'open-folder':
           await openFolder(actionNode.dataset.target);
+          break;
+        case 'check-update':
+          await checkAppUpdate(actionNode);
           break;
         case 'trigger-archive':
           triggerArchive();
@@ -2719,6 +2895,16 @@ function setupEvents() {
       syncBatchSelection();
     } else if (event.target.id === 'library-sort') {
       state.library.sort = event.target.value;
+      state.library.page = 1;
+      renderApp();
+      await loadCatalog();
+    } else if (event.target.id === 'library-tag') {
+      state.library.tag = event.target.value;
+      state.library.page = 1;
+      renderApp();
+      await loadCatalog();
+    } else if (event.target.id === 'library-size') {
+      state.library.size = event.target.value;
       state.library.page = 1;
       renderApp();
       await loadCatalog();

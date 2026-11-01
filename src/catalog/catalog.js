@@ -171,6 +171,16 @@ export class Catalog {
     for (const versions of this.groups.values()) {
       versions.sort((a, b) => compareVersions(b.version, a.version));
     }
+    this.tagCounts = new Map();
+    for (const pkg of this.all) {
+      for (const tag of new Set(pkg.tags)) {
+        const key = normalizeName(tag);
+        if (!key) continue;
+        const entry = this.tagCounts.get(key);
+        if (entry) entry.count += 1;
+        else this.tagCounts.set(key, { tag, count: 1 });
+      }
+    }
     this.meta.count = this.all.length;
     this.meta.identifierCount = this.groups.size;
   }
@@ -214,6 +224,12 @@ export class Catalog {
     return [...(this.providers.get(key) || [])].map((idKey) => this.groups.get(idKey)?.[0]).filter(Boolean);
   }
 
+  tagFacets(limit = 48) {
+    return [...this.tagCounts.values()]
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'zh-CN'))
+      .slice(0, Math.max(1, Number(limit) || 48));
+  }
+
   search(options = {}) {
     const {
       query = '',
@@ -223,11 +239,15 @@ export class Catalog {
       pageSize = 24,
       sort = 'relevance',
       status = 'all',
+      tag = '',
+      size = '',
       installedIdentifiers = new Set(),
       sourceFilter = 'all',
     } = options;
     const installed = new Set([...installedIdentifiers].map((value) => String(value).toLowerCase()));
     const q = String(query || '').trim();
+    const wantedTag = normalizeName(tag);
+    const wantedSize = String(size || '').toLowerCase();
     const items = [];
 
     for (const [idKey, versions] of this.groups) {
@@ -251,6 +271,13 @@ export class Catalog {
         pkg.tags.some((tag) => normalizeName(tag).includes(normalizeName(q))) ? 15 : 0,
       ) : 0;
       if (q && score === 0) continue;
+      if (wantedTag && !pkg.tags.some((item) => normalizeName(item) === wantedTag)) continue;
+      if (wantedSize) {
+        const bytes = Number(pkg.downloadSize) || 0;
+        if (wantedSize === 'small' && !(bytes > 0 && bytes <= 1024 * 1024)) continue;
+        if (wantedSize === 'medium' && !(bytes > 1024 * 1024 && bytes <= 20 * 1024 * 1024)) continue;
+        if (wantedSize === 'large' && !(bytes > 20 * 1024 * 1024)) continue;
+      }
       const isInstalled = installed.has(idKey);
       if (status === 'installed' && !isInstalled) continue;
       if (status === 'updatable') {

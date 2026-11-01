@@ -15,13 +15,13 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("kanmod")]
 [assembly: AssemblyDescription("kanmod installer")]
 [assembly: AssemblyCompany("kanmod")]
-[assembly: AssemblyVersion("0.0.5.0")]
-[assembly: AssemblyFileVersion("0.0.5.0")]
-[assembly: AssemblyInformationalVersion("0.0.5")]
+[assembly: AssemblyVersion("0.0.6.0")]
+[assembly: AssemblyFileVersion("0.0.6.0")]
+[assembly: AssemblyInformationalVersion("0.0.6")]
 
 internal static class Program
 {
-    internal const string AppVersion = "0.0.5";
+    internal const string AppVersion = "0.0.6";
 
     [STAThread]
     private static int Main(string[] args)
@@ -155,10 +155,13 @@ internal static class Program
 
             string exe = Path.Combine(targetDir, "kanmod.exe");
             string uninstaller = Path.Combine(targetDir, "uninstall.exe");
+            string updater = Path.Combine(targetDir, "kanmod-update.exe");
             if (!File.Exists(exe))
                 throw new InvalidOperationException("安装包不完整：缺少 kanmod.exe。");
             if (!File.Exists(uninstaller))
                 throw new InvalidOperationException("安装包不完整：缺少 uninstall.exe。");
+            if (!File.Exists(updater))
+                throw new InvalidOperationException("安装包不完整：缺少 kanmod-update.exe。");
 
             if (!string.IsNullOrEmpty(backup) && Directory.Exists(backup))
             {
@@ -177,7 +180,7 @@ internal static class Program
                 Encoding.UTF8);
 
             if (createIcons)
-                CreateIcons(targetDir, exe, uninstaller);
+                CreateIcons(targetDir, exe, uninstaller, updater);
             RegisterUninstall(targetDir, exe, uninstaller);
 
             CleanupLegacy(legacyInstall, legacyData, targetDir);
@@ -192,12 +195,13 @@ internal static class Program
         }
     }
 
-    private static void CreateIcons(string targetDir, string exe, string uninstaller)
+    private static void CreateIcons(string targetDir, string exe, string uninstaller, string updater)
     {
         CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "kanmod.lnk"), exe, targetDir);
         string menuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "kanmod");
         Directory.CreateDirectory(menuDir);
         CreateShortcut(Path.Combine(menuDir, "kanmod.lnk"), exe, targetDir);
+        CreateShortcut(Path.Combine(menuDir, "更新 kanmod.lnk"), updater, targetDir);
         CreateShortcut(Path.Combine(menuDir, "卸载 kanmod.lnk"), uninstaller, targetDir);
     }
 
@@ -383,7 +387,10 @@ internal static class Program
             shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { targetPath });
             shortcutType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { workingDir });
             shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { targetPath + ",0" });
-            shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "kanmod — KSP 模组管理器" });
+            string description = Path.GetFileName(targetPath).IndexOf("update", StringComparison.OrdinalIgnoreCase) >= 0
+                ? "检查并安装 kanmod 更新"
+                : "kanmod — KSP 模组管理器";
+            shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { description });
             shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
         }
         catch { }

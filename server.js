@@ -18,6 +18,7 @@ import { installArchive, previewInstall, uninstallRecord } from './src/installer
 import { diagnoseGame, findLogFile, planRepairs } from './src/diagnostics.js';
 import { JobQueue } from './src/jobs.js';
 import { translateText, TranslationError, cleanSourceText } from './src/translate.js';
+import { searchModImages, fetchImageBuffer } from './src/modImages.js';
 import {
   DisabledStore,
   computeUpdates,
@@ -31,11 +32,14 @@ import { safeFileName } from './src/util/paths.js';
 import { normalizeIdentifier } from './src/util/version.js';
 
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
-const APP_VERSION = '0.0.5';
+const APP_VERSION = '0.0.6';
 const MAX_JSON_BODY = 4 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const COOKIE_NAME = 'kanmod_token';
 const TOKEN_FILE = path.join(DATA_DIR, 'token');
+const IMAGE_CACHE_DIR = path.join(DATA_DIR, 'images');
+const IMAGE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 class HttpError extends Error {
   constructor(status, message, code = 'REQUEST_FAILED', details = null) {
@@ -262,6 +266,57 @@ async function getActiveInstance(context) {
 function invalidateScan(context, instanceId = null) {
   if (instanceId) context.scanCache.delete(instanceId);
   else context.scanCache.clear();
+}
+
+function imageCachePaths(url) {
+  const key = crypto.createHash('sha256').update(url).digest('hex');
+  return {
+    meta: path.join(IMAGE_CACHE_DIR, `${key}.json`),
+    data: path.join(IMAGE_CACHE_DIR, `${key}.bin`),
+  };
+}
+
+async function readImageCache(url) {
+  const files = imageCachePaths(url);
+  try {
+    const meta = JSON.parse(await fs.readFile(files.meta, 'utf8'));
+    if (!meta?.contentType || Date.now() - Date.parse(meta.savedAt) > IMAGE_CACHE_TTL) return null;
+    return { buffer: await fs.readFile(files.data), contentType: meta.contentType };
+  } catch {
+    return null;
+  }
+}
+
+async function writeImageCache(url, buffer, contentType) {
+  try {
+    await ensureDir(IMAGE_CACHE_DIR);
+    const files = imageCachePaths(url);
+    await fs.writeFile(files.data, buffer);
+    await fs.writeFile(files.meta, JSON.stringify({
+      url,
+      contentType,
+      bytes: buffer.length,
+      savedAt: new Date().toISOString(),
+    }), 'utf8');
+  } catch {
+    // The image still displays even when the cache cannot be written.
+  }
+}
+
+async function galleryFor(context, pkg) {
+  const key = `${lower(pkg.identifier)}@${pkg.version}`;
+  const cached = context.imageCache.get(key);
+  if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) return cached.value;
+  const result = await searchModImages(pkg, { maxImages: 8 });
+  const value = {
+    ...result,
+    images: result.images.map((image) => ({
+      url: image.url,
+      proxyUrl: `/api/image?url=${encodeURIComponent(image.url)}`,
+    })),
+  };
+  context.imageCache.set(key, { at: Date.now(), value });
+  return value;
 }
 
 async function getRuntime(context, { forceScan = false } = {}) {
@@ -888,6 +943,7 @@ async function handleApi(req, res, context, url) {
       return sendJson(res, 200, {
         items: [], total: 0, page: 1, pageSize: config.ui.pageSize, pageCount: 1,
         catalog: catalogStatus(context),
+        facets: { tags: [] },
       });
     }
     let runtime = null;
@@ -905,6 +961,8 @@ async function handleApi(req, res, context, url) {
       pageSize: Number(url.searchParams.get('pageSize')) || config.ui.pageSize,
       sort: url.searchParams.get('sort') || 'relevance',
       status: url.searchParams.get('status') || 'all',
+      tag: url.searchParams.get('tag') || '',
+      size: url.searchParams.get('size') || '',
       installedIdentifiers: installed.identifiers,
       installedVersions: installed.versions,
     });
@@ -912,6 +970,7 @@ async function handleApi(req, res, context, url) {
       ...result,
       catalog: catalogStatus(context),
       kspVersion: runtime?.scan.kspVersion || null,
+      facets: { tags: catalog.tagFacets() },
     });
   }
 
@@ -942,6 +1001,66 @@ async function handleApi(req, res, context, url) {
         ? (await import('./src/util/version.js')).checkKspCompatibility(runtime.scan.kspVersion, pkg)
         : null,
     });
+  }
+
+  if (method === 'GET' && pathname === '/api/images') {
+    requireCatalog(context);
+    const identifier = url.searchParams.get('identifier');
+    if (!identifier) throw new HttpError(400, '缺少模组标识符。', 'IDENTIFIER_REQUIRED');
+    const version = url.searchParams.get('version');
+    const catalog = context.catalogStore.catalog;
+    const pkg = version ? catalog.get(identifier, version) : catalog.get(identifier);
+    if (!pkg) throw new HttpError(404, '索引中找不到该模组。', 'PACKAGE_NOT_FOUND');
+    try {
+      const gallery = await galleryFor(context, pkg);
+      return sendJson(res, 200, {
+        identifier: pkg.identifier,
+        version: pkg.version,
+        ...gallery,
+      });
+    } catch (error) {
+      return sendJson(res, 200, {
+        identifier: pkg.identifier,
+        version: pkg.version,
+        images: [],
+        sources: [],
+        message: `图片检索失败：${error?.message || '网络不可用'}`,
+      });
+    }
+  }
+
+  if (method === 'GET' && pathname === '/api/image') {
+    const remote = url.searchParams.get('url');
+    if (!remote) throw new HttpError(400, '缺少图片地址。', 'IMAGE_URL_REQUIRED');
+    let image = await readImageCache(remote);
+    if (!image) {
+      image = await fetchImageBuffer(remote, { maxBytes: MAX_IMAGE_BYTES, timeoutMs: 20000 });
+      await writeImageCache(remote, image.buffer, image.contentType);
+    }
+    res.writeHead(200, {
+      'Content-Type': image.contentType,
+      'Content-Length': image.buffer.length,
+      'Cache-Control': 'private, max-age=604800',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    return res.end(image.buffer);
+  }
+
+  if (method === 'POST' && pathname === '/api/app/update') {
+    const updater = path.join(APP_ROOT, 'kanmod-update.exe');
+    if (!(await pathExists(updater))) {
+      throw new HttpError(404, '当前是源码运行模式，没有安装更新器。', 'UPDATER_NOT_FOUND', {
+        releaseUrl: 'https://github.com/11ly322/kanmod/releases/latest',
+      });
+    }
+    const child = spawn(updater, [], {
+      cwd: APP_ROOT,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    });
+    child.unref();
+    return sendJson(res, 202, { ok: true, version: APP_VERSION });
   }
 
   if (method === 'POST' && pathname === '/api/translate') {
@@ -1621,6 +1740,7 @@ async function createContext({ demoInfo = null } = {}) {
     scanCache: new Map(),
     registryCache: new Map(),
     disabledCache: new Map(),
+    imageCache: new Map(),
     uploads: new Map(),
     clients: new Set(),
     port: 0,
