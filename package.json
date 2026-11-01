@@ -12,6 +12,7 @@
     "demo": "node bin/kanmod.js --demo",
     "test": "node test/run.js",
     "test:e2e": "node test/e2e.js",
+    "test:ui": "node test/ui-check.mjs",
     "check": "node --check server.js && node --check public/app.js && node --check src/server/app.js"
   }
 }

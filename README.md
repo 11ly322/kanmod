@@ -117,6 +117,7 @@ https://github.com/KSP-CKAN/CKAN-meta/archive/refs/heads/master.tar.gz
 ```powershell
 npm test          # 24 项单元测试
 npm run test:e2e  # 48 项 HTTP 端到端测试（演示实例）
+npm run test:ui   # 无头 Edge 巡检 7 个视图（需要本机 Edge）
 npm run check     # 语法检查
 ```
 
