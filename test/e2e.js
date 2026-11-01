@@ -104,6 +104,15 @@ async function main() {
     const instances = await api(token, '/api/instances');
     check('instances list', Array.isArray(instances.json?.instances) && instances.json.instances.length >= 1);
 
+    const detect = await api(token, '/api/instances/detect', { method: 'POST', body: { path: boot0.json?.demoKspPath } });
+    check('instances detect', detect.status === 200 && Array.isArray(detect.json?.instances), `${detect.status} ${detect.text.slice(0, 160)}`);
+
+    const savedSettings = await api(token, '/api/settings', { method: 'POST', body: { install: { allowWarning: true } } });
+    check('settings save', savedSettings.status === 200 && savedSettings.json?.settings?.install?.allowWarning === true, `${savedSettings.status} ${savedSettings.text.slice(0, 160)}`);
+
+    const demoRefresh = await api(token, '/api/catalog/refresh', { method: 'POST' });
+    check('refresh demo guard', demoRefresh.status === 409 && demoRefresh.json?.error?.code === 'DEMO_REFRESH', `${demoRefresh.status} ${demoRefresh.text.slice(0, 160)}`);
+
     // catalog search
     const search = await api(token, '/api/catalog?q=module');
     check('catalog search 200', search.status === 200);

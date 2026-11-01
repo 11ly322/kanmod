@@ -2,9 +2,9 @@
 import { invalidateScan, getRuntime, installedFor, requireCatalog, normalizeRoots, summarizePlan, resolveFor, enqueueInstall, uploadPackageInfo, installFromUpload } from '../services.js';
 import { HttpError, readJsonBody, readBody, sendJson, MAX_UPLOAD } from '../http.js';
 import { DATA_DIR } from '../../config.js';
-import { ensureDir, pathExists } from '../../util/fsx.js';
+import { ensureDir, pathExists, writeFileAtomic } from '../../util/fsx.js';
 import { safeFileName } from '../../util/paths.js';
-import { previewInstall } from '../../installer.js';
+import { previewInstall, uninstallRecord } from '../../installer.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 

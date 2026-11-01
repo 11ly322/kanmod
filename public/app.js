@@ -66,7 +66,7 @@ export function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.1.1')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.1.2')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -103,7 +103,7 @@ export function renderApp() {
 export function ensureViewData() {
   if (!state.bootstrap) return;
   if (state.view === 'library' && !state.library.data && !state.library.loading) loadCatalog();
-  if (state.view === 'installed' && !state.installed && !state.installedLoading) loadInstalled();
+  if (state.view === 'installed' && state.bootstrap.instance && !state.installed && !state.installedLoading) loadInstalled();
   if ((state.view === 'overview' || state.view === 'diagnostics') && !state.diagnostics && !state.diagnosticsLoading) loadDiagnostics();
   if (state.view === 'jobs' && !state.jobsFullLoaded) loadJobs();
   if (state.view === 'relations' && state.relationshipQuery && !state.relationships && !state.relationshipLoading) {

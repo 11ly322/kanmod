@@ -7,3 +7,4 @@ import './mod-manager.test.js';
 import './mod-images.test.js';
 import './translate.test.js';
 import './curseforge.test.js';
+import './services.test.js';

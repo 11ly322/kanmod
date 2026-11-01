@@ -1,7 +1,7 @@
 // KSP 实例：检测、添加、选择、删除与重新扫描
 import { invalidateScan, getRuntime } from '../services.js';
 import { HttpError, readJsonBody, sendJson } from '../http.js';
-import { lower, nowIso } from '../shared.js';
+import { lower, nowIso, hashId } from '../shared.js';
 import { kspCandidates } from '../../ksp/locate.js';
 import { inspectKspPath } from '../../ksp/version.js';
 import path from 'node:path';

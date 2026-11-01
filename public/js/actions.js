@@ -179,6 +179,7 @@ export async function loadJobs() {
 
 export async function loadInstalled() {
   if (state.installedLoading) return;
+  if (!state.bootstrap?.instance) return;
   state.installedLoading = true;
   if (state.view === 'installed') renderView();
   try {

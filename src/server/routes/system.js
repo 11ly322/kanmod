@@ -6,6 +6,7 @@ import { ensureDir, pathExists } from '../../util/fsx.js';
 import { findLogFile } from '../../diagnostics.js';
 import { openInExplorer } from '../shell.js';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 export function registerSystemRoutes(router) {
 router.post('/api/game/launch', async (req, res, context, url) => {

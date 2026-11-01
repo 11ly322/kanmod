@@ -18,6 +18,7 @@ import { DisabledStore, computeUpdates, disableMod, disabledFileForInstance, ena
 import { ensureDir, formatBytes } from '../util/fsx.js';
 import { safeFileName } from '../util/paths.js';
 import { normalizeIdentifier } from '../util/version.js';
+import { enabledCatalogSources } from '../catalog/sources.js';
 import { HttpError, MAX_JSON_BODY, MAX_UPLOAD } from './http.js';
 import { nowIso, lower, isObject } from './shared.js';
 

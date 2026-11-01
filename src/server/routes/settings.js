@@ -4,8 +4,10 @@ import { HttpError, readJsonBody, sendJson } from '../http.js';
 import { DATA_DIR, APP_ROOT } from '../../config.js';
 import { ensureDir, pathExists } from '../../util/fsx.js';
 import { listCatalogSources } from '../../catalog/sources.js';
+import { isObject } from '../shared.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { APP_VERSION } from '../../version.js';
 
 export function registerSettingsRoutes(router) {
