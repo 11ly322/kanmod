@@ -185,11 +185,20 @@ function analyzeMods(scan, catalog, kspVersion, registry, settings) {
   return mods;
 }
 
-function relationIssue(mod, relation, catalog, kspVersion, providers, settings) {
+function relationIssue(mod, relation, catalog, kspVersion, providers, settings, fixCache = null) {
   const nameKey = normalizeName(relation.name);
   const provided = providers.has(nameKey);
   if (!provided) {
-    const fixPkg = selectFixPackage(catalog, relation, kspVersion, { allowWarning: Boolean(settings.install?.allowWarning) });
+    const cacheKey = `${nameKey}|${relation.minVersion || ''}|${relation.maxVersion || ''}|${Boolean(settings.install?.allowWarning)}|${kspVersion || ''}`;
+    let fixPkg;
+    if (fixCache) {
+      if (!fixCache.has(cacheKey)) {
+        fixCache.set(cacheKey, selectFixPackage(catalog, relation, kspVersion, { allowWarning: Boolean(settings.install?.allowWarning) }));
+      }
+      fixPkg = fixCache.get(cacheKey);
+    } else {
+      fixPkg = selectFixPackage(catalog, relation, kspVersion, { allowWarning: Boolean(settings.install?.allowWarning) });
+    }
     return issue(
       `dep-missing-${mod.identifier || mod.entryId}-${hash(relation.name)}`,
       'error',
@@ -238,15 +247,35 @@ function dependencyVersionIssues(mod, catalog, kspVersion, versionMap, settings)
   return issues;
 }
 
-export function analyzeRelations(scan, catalog, kspVersion, registry, settings = {}) {
+export function analyzeRelations(scan, catalog, kspVersion, registry, settings = {}, options = {}) {
   const mods = analyzeMods(scan, catalog, kspVersion, registry, settings);
   const providers = installedProviders(mods);
   const versionMap = installedVersionMap(mods);
+  const disabledKeys = new Set((options.disabled || [])
+    .map((item) => normalizeName(item.identifier || item.name || item.folder))
+    .filter(Boolean));
+  const fixCache = new Map();
   const issues = [];
+  const disabledDependencies = new Set();
   for (const mod of mods) {
     if (!mod.identifier && !mod.entryId) continue;
     for (const relation of mod.depends || []) {
-      const missing = relationIssue(mod, relation, catalog, kspVersion, providers, settings);
+      const nameKey = normalizeName(relation.name);
+      if (!providers.has(nameKey) && disabledKeys.has(nameKey)) {
+        if (!disabledDependencies.has(nameKey)) {
+          disabledDependencies.add(nameKey);
+          issues.push(issue(
+            `dep-disabled-${hash(nameKey)}`,
+            'warning',
+            'dependency-disabled',
+            `前置已禁用：${relation.name}`,
+            `${relation.name} 已经安装但处于禁用状态，因此依赖它的模组可能无法正常工作。请在“已安装”页面启用它，kanmod 不会重复安装已存在的模组。`,
+            { mods: [mod.identifier].filter(Boolean), dependency: relation.name, autoFixable: false },
+          ));
+        }
+        continue;
+      }
+      const missing = relationIssue(mod, relation, catalog, kspVersion, providers, settings, fixCache);
       if (missing) issues.push(missing);
     }
     issues.push(...dependencyVersionIssues(mod, catalog, kspVersion, versionMap, settings));
@@ -510,11 +539,12 @@ export async function diagnoseGame(options = {}) {
     registry = null,
     settings = {},
     includeLog = true,
+    disabled = [],
   } = options;
   const scanned = scan || await scanGameData(kspPath, { registry });
   const kspVersion = scanned.kspVersion || null;
   const records = recordsOf(registry);
-  const relation = analyzeRelations(scanned, catalog, kspVersion, registry, settings);
+  const relation = analyzeRelations(scanned, catalog, kspVersion, registry, settings, { disabled });
   const issues = [...relation.issues, ...registryIssues(records, relation.mods, scanned), ...duplicateIssues(scanned.duplicates)];
   if (!kspVersion) {
     issues.push(issue(
@@ -559,7 +589,10 @@ export async function diagnoseGame(options = {}) {
     info: deduped.filter((item) => item.severity === 'info').length,
     autoFixable: deduped.filter((item) => item.autoFixable).length,
   };
-  const score = Math.max(0, Math.min(100, 100 - counts.error * 16 - counts.warning * 6 - counts.info));
+  // Informational findings (for example "KSP version not declared") should not
+  // dominate the health score; cap their contribution so a long list of notes
+  // still reads as usable.
+  const score = Math.max(0, Math.min(100, 100 - counts.error * 16 - counts.warning * 6 - Math.min(counts.info, 10)));
   return {
     generatedAt: new Date().toISOString(),
     kspPath: scanned.kspPath,
@@ -581,15 +614,24 @@ export async function diagnoseGame(options = {}) {
 }
 
 export function planRepairs(diagnostics) {
-  const operations = [];
-  const seen = new Set();
+  const byIdentifier = new Map();
   for (const item of diagnostics?.issues || []) {
     if (!item.autoFixable || item.fix?.action !== 'install') continue;
-    const key = `${item.fix.identifier}@${item.fix.version}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    operations.push({ type: 'install', ...item.fix, issueId: item.id });
+    const identifier = item.fix.identifier;
+    if (!identifier) continue;
+    const existing = byIdentifier.get(identifier);
+    if (!existing) {
+      byIdentifier.set(identifier, { type: 'install', ...item.fix, issueId: item.id, issueIds: [item.id] });
+      continue;
+    }
+    existing.issueIds.push(item.id);
+    if (item.fix.version && (!existing.version || compareVersions(item.fix.version, existing.version) > 0)) {
+      existing.version = item.fix.version;
+      existing.label = item.fix.label;
+      existing.issueId = item.id;
+    }
   }
+  const operations = [...byIdentifier.values()];
   return {
     operations,
     count: operations.length,

@@ -8,5 +8,6 @@ import './mod-images.test.js';
 import './translate.test.js';
 import './curseforge.test.js';
 import './curseforge-public.test.js';
+import './diagnostics.test.js';
 import './services.test.js';
 import './idle.test.js';

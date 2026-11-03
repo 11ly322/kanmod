@@ -4,7 +4,7 @@
 
 官网：https://11ly322.github.io/kanmod/
 
-![kanmod](https://img.shields.io/badge/version-0.1.51-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
+![kanmod](https://img.shields.io/badge/version-0.1.6-e11d2e) ![Windows](https://img.shields.io/badge/Windows-10%2F11-1b1719) ![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2020.11-1b1719)
 
 ## 功能
 
@@ -33,7 +33,7 @@
 
 ## 安装与启动
 
-从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.1.51.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
+从 [Releases](https://github.com/11ly322/kanmod/releases) 下载 `kanmod-setup-0.1.6.exe`，双击安装。安装器会创建桌面和开始菜单快捷方式；启动后 `kanmod.exe` 在后台运行本地服务并自动打开界面，不再需要保持命令行窗口。
 
 ```text
 默认安装位置  第一个非 C 盘的 \Programs\kanmod（可在安装器里修改）
@@ -159,7 +159,7 @@ test/                Node 内置测试（单元 + 端到端 + 无头界面）
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-产物位于 `.artifacts/build/kanmod-setup-0.1.51.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
+产物位于 `.artifacts/build/kanmod-setup-0.1.6.exe`。安装器把应用、Node.js 运行时、启动器、卸载器和数据全部放在用户选择的安装目录；默认优先选择非 C 盘。安装器会写入 HKCU 卸载注册项并创建“卸载 kanmod”快捷方式。
 
 ## 已知限制
 

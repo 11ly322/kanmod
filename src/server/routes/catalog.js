@@ -1,5 +1,5 @@
 // 索引、模组详情、关联、图片与 CurseForge 检索
-import { readImageCache, writeImageCache, galleryFor, getRuntime, installedData, requireCatalog, catalogStatus, enqueueRefresh, translateSearchQuery } from '../services.js';
+import { readImageCache, writeImageCache, galleryFor, getRuntime, installedData, requireCatalog, catalogStatus, enqueueRefresh, enqueueCurseForgeInstall, translateSearchQuery } from '../services.js';
 import { HttpError, readJsonBody, readBody, sendJson, MAX_UPLOAD } from '../http.js';
 import { lower } from '../shared.js';
 import { safeFileName } from '../../util/paths.js';
@@ -7,8 +7,8 @@ import { downloadBuffer } from '../../catalog/loader.js';
 import { checkKspCompatibility } from '../../util/version.js';
 import { tagTranslations, translateTag } from '../../tagTranslations.js';
 import { fetchImageBuffer } from '../../modImages.js';
-import { searchCurseForge, curseforgeRequest, curseforgeConfigured, mapCurseForgeDetail, mapCurseForgeMod, CurseForgeError } from '../../curseforge.js';
-import { fetchPublicProject, toCurseForgeMod, PublicCurseForgeError } from '../../curseforgePublic.js';
+import { searchCurseForge, curseforgeRequest, curseforgeConfigured, pickCurseForgeFile, mapCurseForgeDetail, mapCurseForgeMod, CurseForgeError } from '../../curseforge.js';
+import { fetchPublicProject, toCurseForgeMod, forgeCdnUrl, PublicCurseForgeError } from '../../curseforgePublic.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -110,6 +110,62 @@ router.get(/^\/api\/curseforge\/mod\/(\d+)$/, async (req, res, context, url, mat
     if (!mod) throw new CurseForgeError('CurseForge 项目不存在。', 'CURSEFORGE_NOT_FOUND');
     const data = mapCurseForgeDetail(mod, { kspVersion, description, screenshots });
     return sendJson(res, 200, data);
+});
+
+router.post('/api/curseforge/install', async (req, res, context, url) => {
+    const body = await readJsonBody(req);
+    const ref = String(body.ref || body.id || '').trim();
+    if (!ref) throw new HttpError(400, '请输入 CurseForge 项目链接、slug 或数字 ID。', 'CURSEFORGE_REF_EMPTY');
+    const config = context.configStore.get();
+    const runtime = await getRuntime(context);
+    const kspVersion = runtime.scan.kspVersion || runtime.info.version || null;
+    let project = null;
+    let mod = null;
+    if (curseforgeConfigured(config)) {
+      const numeric = /^\d{1,10}$/.test(ref);
+      const projectId = numeric ? Number(ref) : (await fetchPublicProject(ref)).id;
+      mod = await curseforgeRequest(`/mods/${projectId}`, { apiKey: config.curseforgeApiKey });
+      if (!mod) throw new HttpError(404, '没有找到这个 CurseForge 项目。', 'CURSEFORGE_NOT_FOUND');
+    } else {
+      project = await fetchPublicProject(ref);
+      mod = toCurseForgeMod(project);
+    }
+    const mapped = mapCurseForgeMod(mod, { kspVersion });
+    const files = Array.isArray(mod.latestFiles) ? mod.latestFiles : [];
+    const wanted = body.fileId ? files.find((file) => String(file.id) === String(body.fileId)) : null;
+    const file = wanted || pickCurseForgeFile(mod, kspVersion);
+    if (!file) throw new HttpError(409, '这个 CurseForge 项目没有可安装的文件。', 'CURSEFORGE_NO_FILE');
+    let downloadUrl = file.downloadUrl || null;
+    if (!downloadUrl && file.id && file.fileName) downloadUrl = forgeCdnUrl({ id: file.id, name: file.fileName });
+    if (!downloadUrl) {
+      throw new HttpError(409, 'CurseForge 没有提供这个文件的直链，请在项目页手动下载后用“本地安装”。', 'CURSEFORGE_NO_DOWNLOAD');
+    }
+    const version = String(file.displayName || file.fileName || mapped.version || '');
+    const pkg = {
+      identifier: `curseforge-${mod.id}`,
+      name: mapped.name,
+      version,
+      author: mapped.author || '',
+      abstract: mapped.abstract || '',
+      license: '见项目页',
+      download: [downloadUrl],
+      downloadSize: Number(file.fileLength) || null,
+      install: [],
+      resources: { homepage: mapped.resources?.homepage || '' },
+      curseforge: {
+        id: String(mod.id),
+        slug: mod.slug || mapped.slug || '',
+        url: mapped.resources?.homepage || '',
+        fileId: file.id || null,
+        fileName: file.fileName || null,
+      },
+    };
+    const job = await enqueueCurseForgeInstall(context, { pkg, meta: { identifier: pkg.identifier, fileId: file.id || null } });
+    return sendJson(res, 202, {
+      ok: true,
+      job,
+      package: { identifier: pkg.identifier, name: pkg.name, version, fileId: file.id || null, homepage: pkg.resources.homepage },
+    });
 });
 
 router.get('/api/catalog', async (req, res, context, url) => {

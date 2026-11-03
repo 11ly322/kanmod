@@ -13,7 +13,8 @@ export class PublicCurseForgeError extends Error {
     super(message);
     this.name = 'PublicCurseForgeError';
     this.code = code;
-    this.status = code === 'CURSEFORGE_PUBLIC_NOT_FOUND' ? 404 : 502;
+    const clientError = code === 'CURSEFORGE_REF_EMPTY' || code === 'CURSEFORGE_REF_INVALID';
+    this.status = clientError ? 400 : (code === 'CURSEFORGE_PUBLIC_NOT_FOUND' ? 404 : 502);
     this.details = details;
   }
 }
@@ -126,7 +127,7 @@ export async function fetchPublicProject(input, { fetchImpl = globalThis.fetch, 
   try {
     response = await fetchImpl(`${WIDGET_HOST}${path}`, {
       signal: controller.signal,
-      headers: { accept: 'application/json', 'user-agent': 'kanmod/0.1.51' },
+      headers: { accept: 'application/json', 'user-agent': 'kanmod/0.1.6' },
     });
   } catch (error) {
     if (error?.name === 'AbortError') throw new PublicCurseForgeError('查询 CurseForge 项目超时，请稍后重试。', 'CURSEFORGE_PUBLIC_TIMEOUT');

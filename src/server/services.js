@@ -103,8 +103,12 @@ async function getRuntime(context, { forceScan = false } = {}) {
     throw new HttpError(409, `KSP 路径已失效：${instance.path}`, 'INSTANCE_INVALID');
   }
   const registry = await getRegistry(context, instance.id);
+  // Scanning GameData is expensive on large installs. Rescans are only needed
+  // after kanmod mutates the folder (invalidateScan) or when the user asks for
+  // a refresh, so keep the cached scan for a minute instead of a few seconds.
+  const SCAN_CACHE_TTL_MS = 60_000;
   let cached = context.scanCache.get(instance.id);
-  if (forceScan || !cached || Date.now() - cached.at > 5_000) {
+  if (forceScan || !cached || Date.now() - cached.at > SCAN_CACHE_TTL_MS) {
     const scan = await scanGameData(info.path, { registry: registry.toJSON() });
     cached = { at: Date.now(), scan };
     context.scanCache.set(instance.id, cached);
@@ -438,6 +442,50 @@ async function enqueueInstall(context, plan, { title = '安装模组', meta = {}
   }, { instanceId: runtime.instance.id, ...meta });
 }
 
+async function enqueueCurseForgeInstall(context, { pkg, meta = {} }) {
+  const runtime = await getRuntime(context);
+  const settings = operationSettings(context);
+  const downloadsDir = path.join(DATA_DIR, 'downloads');
+  const backupsDir = path.join(DATA_DIR, 'backups', runtime.instance.id);
+  await ensureDir(downloadsDir);
+  return context.jobs.create('install', `从 CurseForge 安装 ${pkg.name}`, async ({ report, signal }) => {
+    report({ phase: 'download', percent: 4, message: `准备下载 ${pkg.name} ${pkg.version}` });
+    const download = await downloadPackage(pkg, {
+      destDir: downloadsDir,
+      settings,
+      signal,
+      onProgress: (progress) => report({ ...progress, message: progress.message || pkg.name }),
+    });
+    report({ phase: 'install', percent: 72, message: `正在安装 ${pkg.name} ${pkg.version}` });
+    const result = await installArchive({
+      archivePath: download.path,
+      kspPath: runtime.info.path,
+      packageInfo: { ...pkg, source: 'curseforge' },
+      settings: context.configStore.get(),
+      backupsDir,
+      signal,
+      onProgress: (progress) => report(progress),
+    });
+    await runtime.registry.upsert(result.record);
+    invalidateScan(context, runtime.instance.id);
+    if (!settings.install.keepDownloads) await fs.rm(download.path, { force: true }).catch(() => {});
+    report({ phase: 'done', percent: 100, message: '安装完成' });
+    return {
+      installed: [{
+        identifier: pkg.identifier,
+        name: pkg.name,
+        version: pkg.version,
+        files: result.record.files.length,
+        folder: result.plan.primaryFolder,
+        candidate: download.candidate?.label || null,
+      }],
+      instanceId: runtime.instance.id,
+      source: 'curseforge',
+      ...meta,
+    };
+  }, { instanceId: runtime.instance.id, ...meta });
+}
+
 async function enqueueRefresh(context) {
   if (context.demo) throw new HttpError(409, '演示模式使用内置离线索引，不需要联网刷新。', 'DEMO_REFRESH');
   const sources = enabledCatalogSources(context.configStore.get());
@@ -460,9 +508,10 @@ async function enqueueRefresh(context) {
   });
 }
 
-async function runDiagnostics(context, { includeLog = true } = {}) {
-  const runtime = await getRuntime(context, { forceScan: true });
+async function runDiagnostics(context, { includeLog = true, forceScan = false } = {}) {
+  const runtime = await getRuntime(context, { forceScan });
   const settings = operationSettings(context);
+  const disabledStore = await getDisabledStore(context, runtime.instance.id);
   const diagnostics = await diagnoseGame({
     kspPath: runtime.info.path,
     scan: runtime.scan,
@@ -470,6 +519,7 @@ async function runDiagnostics(context, { includeLog = true } = {}) {
     registry: runtime.registry,
     settings,
     includeLog,
+    disabled: disabledStore.records(),
   });
   return { runtime, diagnostics, repairs: planRepairs(diagnostics) };
 }
@@ -672,6 +722,7 @@ export {
   operationSettings,
   resolveFor,
   enqueueInstall,
+  enqueueCurseForgeInstall,
   enqueueRefresh,
   runDiagnostics,
   cleanupUploads,

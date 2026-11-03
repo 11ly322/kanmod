@@ -1,7 +1,7 @@
 // Application shell: rendering, boot and event wiring.
 import { VIEW_META, api, closeDrawer, closeModal, esc, icon, runConfirm, setBusy, spinnerLine, state, toast, truncate, updateNavCounts } from './js/core.js';
 import { diagnosticsHtml, installedHtml, jobsHtml, libraryHtml, modPageHtml, overviewHtml, relationsHtml, settingsHtml } from './js/views.js';
-import { addInstanceModal, appendSourceRow, batchAction, cancelJob, checkAppUpdate, clearCache, clearLibraryFilter, confirmInstall, confirmRepair, confirmUploadInstall, deleteInstance, deleteManagedMod, detectInstances, disableManagedMod, enableManagedMod, exportCatalog, exportModpack, importCatalog, importModpack, importModpackFile, launchGame, loadCatalog, loadCurseForge, loadDiagnostics, loadInstalled, loadJobs, loadModImages, loadModPage, loadRelationships, navigate, openFolder, openLightbox, openMod, openModPage, openPlan, openRepairPreview, openUpdateManager, previewArchive, refreshCatalog, refreshJobs, refreshScan, saveSettings, selectInstance, setInstalledFilter, setLibraryPage, setLibraryStatus, showCacheStatus, startEvents, stepLightbox, switchLibrarySource, syncBatchSelection, toggleBatch, translateMod, triggerArchive, uninstall, updateAllMods, updateManagedMod, updateSelectedMods, uploadCatalogFile } from './js/actions.js';
+import { addInstanceModal, appendSourceRow, batchAction, cancelJob, checkAppUpdate, clearCache, clearLibraryFilter, confirmInstall, confirmRepair, confirmUploadInstall, deleteInstance, deleteManagedMod, detectInstances, disableManagedMod, enableManagedMod, exportCatalog, exportModpack, importCatalog, importCurseForgeMod, importModpack, importModpackFile, launchGame, loadCatalog, loadCurseForge, loadDiagnostics, loadInstalled, loadJobs, loadModImages, loadModPage, loadRelationships, navigate, openFolder, openLightbox, openMod, openModPage, openPlan, openRepairPreview, openUpdateManager, previewArchive, refreshCatalog, refreshJobs, refreshScan, saveSettings, selectInstance, setInstalledFilter, setLibraryPage, setLibraryStatus, showCacheStatus, startEvents, stepLightbox, switchLibrarySource, syncBatchSelection, toggleBatch, translateMod, triggerArchive, uninstall, updateAllMods, updateManagedMod, updateSelectedMods, uploadCatalogFile } from './js/actions.js';
 
 export function viewHtml() {
   if (!state.bootstrap) return spinnerLine('正在加载 kanmod…');
@@ -67,7 +67,7 @@ export function renderApp() {
           ${icon('chevron', 15)}
         </button>
         <div class="sidebar-foot">
-          <span>v${esc(state.bootstrap.app?.version || '0.1.51')}</span>
+          <span>v${esc(state.bootstrap.app?.version || '0.1.6')}</span>
           <span>·</span>
           <span>本地运行</span>
           ${state.bootstrap.demo ? '<span class="demo-pill">演示</span>' : ''}
@@ -366,6 +366,9 @@ export function setupEvents() {
           break;
         case 'confirm-repair':
           await confirmRepair();
+          break;
+        case 'install-curseforge':
+          await importCurseForgeMod(actionNode.dataset.ref);
           break;
         case 'uninstall':
           uninstall(actionNode.dataset.id);

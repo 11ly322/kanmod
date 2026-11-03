@@ -93,6 +93,9 @@ export async function downloadBuffer(url, options = {}) {
     maxBytes = 2 * 1024 * 1024 * 1024,
     onProgress = () => {},
     signal,
+    headers = {},
+    allowNotModified = false,
+    withMeta = false,
   } = options;
   const parsed = new URL(url);
   if (!['https:', 'http:'].includes(parsed.protocol)) {
@@ -107,10 +110,16 @@ export async function downloadBuffer(url, options = {}) {
       headers: {
         'User-Agent': 'kanmod/1.0 (KSP mod manager; local)',
         Accept: 'application/gzip, application/zip, application/json, */*',
+        ...headers,
       },
       redirect: 'follow',
       signal: controller.signal,
     });
+    const etag = response.headers.get('etag') || null;
+    const lastModified = response.headers.get('last-modified') || null;
+    if (response.status === 304 && allowNotModified) {
+      return { buffer: null, notModified: true, etag: etag || headers['If-None-Match'] || null, lastModified, url };
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
     const total = Number(response.headers.get('content-length')) || 0;
     if (total && total > maxBytes) throw new Error(`索引超过大小限制（${Math.round(total / 1024 / 1024)} MB）。`);
@@ -129,7 +138,9 @@ export async function downloadBuffer(url, options = {}) {
       chunks.push(Buffer.from(value));
       onProgress({ received, total, url });
     }
-    return Buffer.concat(chunks);
+    const buffer = Buffer.concat(chunks);
+    if (withMeta) return { buffer, notModified: false, etag, lastModified, url };
+    return buffer;
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
@@ -147,11 +158,23 @@ export class CatalogStore {
     const raw = await readJson(this.cacheFile, null);
     if (!raw || !Array.isArray(raw.packages) || !raw.packages.length) return null;
     const meta = raw.meta && typeof raw.meta === 'object' ? raw.meta : {};
+    // Schema 2 caches store already-normalized packages, so the re-normalize
+    // pass at startup can be skipped. Older caches hold the same shape, so a
+    // quick probe of the first package is enough to apply the fast path.
+    const first = raw.packages[0];
+    const normalized = raw.normalized === true
+      || (first && typeof first.versionSort === 'string' && Array.isArray(first.install) && Array.isArray(first.depends));
     this.catalog = new Catalog(raw.packages, {
       ...meta,
       loadedAt: meta.loadedAt || raw.savedAt || null,
       stale: true,
-    });
+    }, { normalized });
+    if (raw.normalized !== true) {
+      // Caches written before schema 2 are pretty-printed (~78 MB vs ~53 MB)
+      // and cost a second of JSON parsing at every start. Rewrite them once in
+      // the background; the normalized fast path already avoids re-normalizing.
+      this.saveCache().catch(() => {});
+    }
     return this.catalog;
   }
 
@@ -197,11 +220,12 @@ export class CatalogStore {
     if (!this.catalog) return;
     await ensureDir(path.dirname(this.cacheFile));
     await writeJsonAtomic(this.cacheFile, {
-      schema: 1,
+      schema: 2,
+      normalized: true,
       savedAt: new Date().toISOString(),
       meta: this.catalog.meta,
       packages: this.catalog.all,
-    });
+    }, { pretty: false });
   }
 
   async importBuffer(buffer, meta = {}) {
@@ -236,13 +260,47 @@ export class CatalogStore {
           continue;
         }
         try {
-          onProgress({ phase: 'download', source: source.name, url, received: 0, total: 0, message: `正在从 ${source.name} 下载索引…` });
-          const buffer = await downloadBuffer(url, {
+          const cachedMeta = this.catalog?.meta || {};
+          const conditional = cachedMeta.etag && cachedMeta.sourceUrl === url
+            ? { 'If-None-Match': cachedMeta.etag }
+            : {};
+          onProgress({
+            phase: 'download',
+            source: source.name,
+            url,
+            received: 0,
+            total: 0,
+            message: conditional['If-None-Match']
+              ? `正在检查 ${source.name} 是否有更新…`
+              : `正在从 ${source.name} 下载索引…`,
+          });
+          const fetched = await downloadBuffer(url, {
             timeoutMs: 120_000,
             maxBytes: 512 * 1024 * 1024,
+            headers: conditional,
+            allowNotModified: true,
+            withMeta: true,
             onProgress: (progress) => onProgress({ phase: 'download', source: source.name, url, ...progress }),
             signal,
           });
+          if (fetched.notModified && this.catalog) {
+            this.catalog.meta.loadedAt = new Date().toISOString();
+            onProgress({
+              phase: 'parse',
+              source: source.name,
+              url,
+              message: '索引没有变化，直接复用本地缓存。',
+            });
+            return {
+              catalog: this.catalog,
+              source: { id: source.id, name: source.name, url },
+              attempts,
+              downloadedBytes: 0,
+              notModified: true,
+            };
+          }
+          const buffer = fetched.buffer;
+          if (!buffer) throw new Error('服务器没有返回索引内容。');
           onProgress({ phase: 'parse', source: source.name, url, received: buffer.length, total: buffer.length, message: '正在解析 CKAN 元数据…' });
           const parsed = parseCatalogBuffer(buffer, { sourceName: source.name, sourceUrl: url });
           const catalog = await this.setPackages(parsed.packages, {
@@ -252,6 +310,7 @@ export class CatalogStore {
             demo: false,
             loadedAt: new Date().toISOString(),
             invalidEntries: parsed.invalid,
+            etag: fetched.etag || null,
           });
           return {
             catalog,

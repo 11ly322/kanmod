@@ -1,4 +1,4 @@
-import { checkKspCompatibility, compareVersions, compatibilityRank, normalizeName, shortVersion } from '../util/version.js';
+import { checkKspCompatibility, compareVersions, normalizeName, shortVersion } from '../util/version.js';
 
 function asArray(value) {
   if (!value) return [];
@@ -107,20 +107,25 @@ export function normalizePackage(raw) {
   };
 }
 
-function bestMatchScore(pkg, query) {
-  const q = normalizeName(query);
-  if (!q) return 0;
-  const name = normalizeName(pkg.name);
-  const id = normalizeName(pkg.identifier);
-  if (name === q || id === q) return 100;
-  if (name.startsWith(q) || id.startsWith(q)) return 70;
-  if (name.includes(q) || id.includes(q)) return 50;
-  if (normalizeName(pkg.abstract).includes(q)) return 20;
-  return 0;
+function adoptNormalizedPackage(pkg) {
+  if (!pkg || !pkg.identifier || pkg.version === undefined || pkg.version === null) return null;
+  if (!Array.isArray(pkg.tags)) pkg.tags = [];
+  if (!Array.isArray(pkg.depends)) pkg.depends = [];
+  if (!Array.isArray(pkg.recommends)) pkg.recommends = [];
+  if (!Array.isArray(pkg.suggests)) pkg.suggests = [];
+  if (!Array.isArray(pkg.supports)) pkg.supports = [];
+  if (!Array.isArray(pkg.conflicts)) pkg.conflicts = [];
+  if (!Array.isArray(pkg.provides)) pkg.provides = [];
+  if (!Array.isArray(pkg.install)) pkg.install = [];
+  if (!pkg.resources || typeof pkg.resources !== 'object') pkg.resources = {};
+  if (!pkg.versionSort) pkg.versionSort = shortVersion(pkg.version);
+  return pkg;
 }
 
+const COLLATOR = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
+
 export class Catalog {
-  constructor(packages, meta = {}) {
+  constructor(packages, meta = {}, options = {}) {
     this.meta = {
       count: 0,
       identifierCount: 0,
@@ -135,10 +140,15 @@ export class Catalog {
     this.all = [];
     this.byName = new Map();
     this.providers = new Map();
+    // Memoized picks and match keys keep repeated searches cheap.
+    this.pickCache = new Map();
+    this.searchKeys = new WeakMap();
+    this.searchCache = new Map();
+    this.normalized = options.normalized === true;
 
     const seen = new Map();
     for (const raw of packages || []) {
-      const pkg = normalizePackage(raw);
+      const pkg = this.normalized ? adoptNormalizedPackage(raw) : normalizePackage(raw);
       if (!pkg) continue;
       const key = `${pkg.identifier.toLowerCase()}\u0000${pkg.version.toLowerCase()}`;
       if (seen.has(key)) {
@@ -230,11 +240,58 @@ export class Catalog {
       .slice(0, Math.max(1, Number(limit) || 48));
   }
 
+  matchKeys(pkg) {
+    let keys = this.searchKeys.get(pkg);
+    if (keys) return keys;
+    keys = {
+      name: normalizeName(pkg.name),
+      id: normalizeName(pkg.identifier),
+      abstract: normalizeName(pkg.abstract),
+      tags: pkg.tags.map((tag) => normalizeName(tag)),
+    };
+    this.searchKeys.set(pkg, keys);
+    return keys;
+  }
+
+  matchScore(keys, q) {
+    if (keys.name === q || keys.id === q) return 100;
+    if (keys.name.startsWith(q) || keys.id.startsWith(q)) return 70;
+    if (keys.name.includes(q) || keys.id.includes(q)) return 50;
+    if (keys.abstract.includes(q)) return 20;
+    return 0;
+  }
+
+  pickFor(idKey, versions, kspVersion, mode) {
+    const cacheKey = `${kspVersion || ''}|${mode}`;
+    let map = this.pickCache.get(cacheKey);
+    if (!map) {
+      map = new Map();
+      this.pickCache.set(cacheKey, map);
+    }
+    if (map.has(idKey)) return map.get(idKey);
+    let chosen = null;
+    if (mode === 'strict') {
+      for (const pkg of versions) {
+        const compatibility = checkKspCompatibility(kspVersion, pkg);
+        if (compatibility.status === 'compatible') {
+          chosen = { pkg, compatibility };
+          break;
+        }
+      }
+    } else {
+      // Keep the long-standing behaviour: the newest version represents the
+      // package, with its own compatibility badge.
+      const pkg = versions[0];
+      chosen = { pkg, compatibility: checkKspCompatibility(kspVersion, pkg) };
+    }
+    map.set(idKey, chosen);
+    return chosen;
+  }
+
   search(options = {}) {
     const {
       query = '',
       kspVersion = null,
-      allowWarning = false,
       page = 1,
       pageSize = 24,
       sort = 'relevance',
@@ -245,33 +302,31 @@ export class Catalog {
       sourceFilter = 'all',
     } = options;
     const installed = new Set([...installedIdentifiers].map((value) => String(value).toLowerCase()));
-    const q = String(query || '').trim();
+    const q = normalizeName(String(query || '').trim());
     const wantedTag = normalizeName(tag);
     const wantedSize = String(size || '').toLowerCase();
-    const items = [];
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeSize = Math.min(96, Math.max(6, Number(pageSize) || 24));
+    const installedVersions = options.installedVersions;
+    const installedSig = `${installed.size}:${[...installed].sort().join(',')}`;
+    const cacheKey = [q, kspVersion || '', safePage, safeSize, sort, status, wantedTag, wantedSize, sourceFilter, installedSig].join('|');
+    const cached = this.searchCache.get(cacheKey);
+    if (cached) return cached;
 
+    const mode = status === 'compatible' ? 'strict' : 'any';
+    const items = [];
     for (const [idKey, versions] of this.groups) {
-      let chosen = null;
-      for (const pkg of versions) {
-        const compatibility = checkKspCompatibility(kspVersion, pkg);
-        const rank = compatibilityRank(compatibility.status);
-        if (status === 'compatible' && compatibility.status !== 'compatible') continue;
-        if (status === 'compatible' && compatibility.status === 'incompatible') continue;
-        chosen = { pkg, compatibility };
-        break;
-      }
-      if (!chosen && status !== 'compatible') {
-        const pkg = versions[0];
-        chosen = { pkg, compatibility: checkKspCompatibility(kspVersion, pkg) };
-      }
+      const chosen = this.pickFor(idKey, versions, kspVersion, mode);
       if (!chosen) continue;
       const pkg = chosen.pkg;
-      const score = q ? Math.max(
-        bestMatchScore(pkg, q),
-        pkg.tags.some((tag) => normalizeName(tag).includes(normalizeName(q))) ? 15 : 0,
-      ) : 0;
-      if (q && score === 0) continue;
-      if (wantedTag && !pkg.tags.some((item) => normalizeName(item) === wantedTag)) continue;
+      const keys = this.matchKeys(pkg);
+      let score = 0;
+      if (q) {
+        score = this.matchScore(keys, q);
+        if (!score && keys.tags.some((item) => item.includes(q))) score = 15;
+        if (!score) continue;
+      }
+      if (wantedTag && !keys.tags.includes(wantedTag)) continue;
       if (wantedSize) {
         const bytes = Number(pkg.downloadSize) || 0;
         if (wantedSize === 'small' && !(bytes > 0 && bytes <= 1024 * 1024)) continue;
@@ -279,10 +334,10 @@ export class Catalog {
         if (wantedSize === 'large' && !(bytes > 20 * 1024 * 1024)) continue;
       }
       const isInstalled = installed.has(idKey);
+      const installedVersion = installedVersions?.get?.(idKey) || null;
       if (status === 'installed' && !isInstalled) continue;
       if (status === 'updatable') {
         if (!isInstalled) continue;
-        const installedVersion = options.installedVersions?.get?.(idKey);
         if (!installedVersion || compareVersions(pkg.version, installedVersion) <= 0) continue;
       }
       if (sourceFilter !== 'all' && pkg.sourceId && pkg.sourceId !== sourceFilter) continue;
@@ -301,30 +356,34 @@ export class Catalog {
         kind: pkg.kind,
         compatibility: chosen.compatibility,
         installed: isInstalled,
-        installedVersion: options.installedVersions?.get?.(idKey) || null,
+        installedVersion,
         score,
       });
     }
 
-    const sorted = items.sort((a, b) => {
-      if (sort === 'name') return a.name.localeCompare(b.name, 'zh-CN');
+    items.sort((a, b) => {
+      if (sort === 'name') return COLLATOR.compare(a.name, b.name);
       if (sort === 'size') return (b.downloadSize || 0) - (a.downloadSize || 0);
       if (sort === 'version') return compareVersions(b.version, a.version);
       if (a.installed !== b.installed) return a.installed ? -1 : 1;
       if (sort === 'relevance' && q && b.score !== a.score) return b.score - a.score;
-      return a.name.localeCompare(b.name, 'zh-CN');
+      return COLLATOR.compare(a.name, b.name);
     });
 
-    const safePage = Math.max(1, Number(page) || 1);
-    const safeSize = Math.min(96, Math.max(6, Number(pageSize) || 24));
     const start = (safePage - 1) * safeSize;
-    return {
-      items: sorted.slice(start, start + safeSize),
-      total: sorted.length,
+    const result = {
+      items: items.slice(start, start + safeSize),
+      total: items.length,
       page: safePage,
       pageSize: safeSize,
-      pageCount: Math.max(1, Math.ceil(sorted.length / safeSize)),
+      pageCount: Math.max(1, Math.ceil(items.length / safeSize)),
     };
+    if (this.searchCache.size >= 40) {
+      const oldest = this.searchCache.keys().next().value;
+      if (oldest !== undefined) this.searchCache.delete(oldest);
+    }
+    this.searchCache.set(cacheKey, result);
+    return result;
   }
 
   relationships(identifier, version, options = {}) {

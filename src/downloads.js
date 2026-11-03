@@ -232,6 +232,21 @@ export function buildDownloadCandidates(pkg, settings = {}) {
     }
   }
 
+  // GitHub Release downloads redirect to objects.githubusercontent.com, which is
+  // frequently slow or unreachable on mainland networks. A public mirror is only
+  // tried after the author link fails, and can be turned off in settings.
+  if (settings.network?.githubMirror !== false) {
+    for (const url of direct) {
+      if (!/^https:\/\/github\.com\//i.test(url)) continue;
+      push({
+        url: `https://ghproxy.net/${url}`,
+        kind: 'github-mirror',
+        label: 'GitHub 镜像 · ghproxy.net',
+        pageUrl: null,
+      });
+    }
+  }
+
   if (githubRepo(pkg)) {
     push({
       url: `github://${githubRepo(pkg).owner}/${githubRepo(pkg).repo}@${pkg.version}`,
@@ -267,6 +282,7 @@ function isAllowedUrl(url, settings) {
 async function downloadToFile(url, target, options = {}) {
   const {
     timeoutMs = 180_000,
+    stallTimeoutMs = 20_000,
     maxBytes = 2 * 1024 * 1024 * 1024,
     expectedSha256 = null,
     onProgress = () => {},
@@ -274,6 +290,11 @@ async function downloadToFile(url, target, options = {}) {
   } = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error('下载超时。')), timeoutMs);
+  let stallTimer = null;
+  const armStall = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => controller.abort(new Error(`下载停滞超过 ${Math.round(stallTimeoutMs / 1000)} 秒，已切换下载源。`)), stallTimeoutMs);
+  };
   const onAbort = () => controller.abort(new Error('已取消。'));
   signal?.addEventListener('abort', onAbort, { once: true });
   const temp = `${target}.${process.pid}.${Date.now()}.part`;
@@ -298,9 +319,11 @@ async function downloadToFile(url, target, options = {}) {
     const hash = crypto.createHash('sha256');
     let received = 0;
     handle = await fs.open(temp, 'w');
+    armStall();
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      armStall();
       received += value.byteLength;
       if (received > maxBytes) {
         controller.abort(new Error('文件超过大小限制。'));
@@ -310,6 +333,8 @@ async function downloadToFile(url, target, options = {}) {
       await handle.write(value);
       onProgress({ received, total, url });
     }
+    clearTimeout(stallTimer);
+    stallTimer = null;
     await handle.close();
     handle = null;
     if (!received) throw new Error('下载内容为空。');
@@ -321,6 +346,7 @@ async function downloadToFile(url, target, options = {}) {
     return { bytes: received, sha256: digest, contentType };
   } finally {
     clearTimeout(timer);
+    clearTimeout(stallTimer);
     signal?.removeEventListener('abort', onAbort);
     if (handle) await handle.close().catch(() => {});
     await fs.rm(temp, { force: true }).catch(() => {});
@@ -350,6 +376,7 @@ export async function downloadPackage(pkg, options = {}) {
     signal,
     maxBytes = (settings.network?.maxDownloadMB || 2048) * 1024 * 1024,
     timeoutMs = (settings.network?.downloadTimeoutSeconds || 180) * 1000,
+    stallTimeoutMs = (settings.network?.stallTimeoutSeconds || 20) * 1000,
   } = options;
   await ensureDir(destDir);
   const candidates = buildDownloadCandidates(pkg, settings);
@@ -389,11 +416,13 @@ export async function downloadPackage(pkg, options = {}) {
       try {
         if (item.kind !== 'demo') {
           const cached = await readJson(metaFile, null);
-          if (cached && cached.sha256 && expectedSha256 && cached.sha256 === expectedSha256) {
+          if (cached) {
             const stat = await fs.stat(target).catch(() => null);
-            if (stat) {
+            const sameSize = stat && Number(cached.bytes) > 0 && stat.size === Number(cached.bytes);
+            const sameHash = !expectedSha256 || (cached.sha256 && cached.sha256 === expectedSha256);
+            if (sameSize && sameHash) {
               onProgress({ phase: 'complete', source: item.label, message: '复用已下载的安装包', total: stat.size, received: stat.size });
-              return { path: target, bytes: stat.size, sha256: cached.sha256, candidate: item, attempts, cached: true };
+              return { path: target, bytes: stat.size, sha256: cached.sha256 || null, candidate: item, attempts, cached: true };
             }
           }
         }
@@ -409,6 +438,7 @@ export async function downloadPackage(pkg, options = {}) {
           ? await copyDemoArchive(item.url, target, settings)
           : await downloadToFile(item.url, target, {
             timeoutMs,
+            stallTimeoutMs,
             maxBytes,
             expectedSha256,
             signal,

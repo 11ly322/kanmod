@@ -178,6 +178,11 @@ async function main() {
     const cfNoKey = await api(token, '/api/curseforge/search?q=not%20a%20valid%20ref');
     check('curseforge keyless mode', cfNoKey.status === 200 && cfNoKey.json?.needsKey === true && cfNoKey.json?.public === true);
     check('curseforge keyless rejects bad ref', cfNoKey.json?.items?.length === 0 && /slug|链接/.test(String(cfNoKey.json?.message || '')));
+    // Keyless install entry: ref parsing happens before any network call.
+    const cfInstallEmpty = await api(token, '/api/curseforge/install', { method: 'POST', body: {} });
+    check('curseforge install empty ref', cfInstallEmpty.status === 400 && cfInstallEmpty.json?.error?.code === 'CURSEFORGE_REF_EMPTY');
+    const cfInstallBad = await api(token, '/api/curseforge/install', { method: 'POST', body: { ref: 'not a valid ref!' } });
+    check('curseforge install bad ref', cfInstallBad.status === 400 && cfInstallBad.json?.error?.code === 'CURSEFORGE_REF_INVALID');
 
     // mods batch validation
     const badBatch = await api(token, '/api/mods/batch', { method: 'POST', body: { action: 'explode', identifiers: ['ModuleManager'] } });

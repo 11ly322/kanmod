@@ -13,9 +13,9 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyTitle("kanmod updater")]
 [assembly: System.Reflection.AssemblyProduct("kanmod")]
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
-[assembly: System.Reflection.AssemblyVersion("0.1.51.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.51.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.51")]
+[assembly: System.Reflection.AssemblyVersion("0.1.6.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.6.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.6")]
 
 internal static class Program
 {
@@ -75,7 +75,7 @@ internal static class Program
         }
 
         var request = (HttpWebRequest)WebRequest.Create(release.AssetUrl);
-        request.UserAgent = "kanmod-updater/0.1.51";
+        request.UserAgent = "kanmod-updater/0.1.6";
         request.Proxy = null;
         request.Timeout = 30000;
         using (var response = (HttpWebResponse)request.GetResponse())
@@ -255,7 +255,7 @@ internal sealed class ReleaseInfo
     private static string Get(string url)
     {
         var request = (HttpWebRequest)WebRequest.Create(url);
-        request.UserAgent = "kanmod-updater/0.1.51";
+        request.UserAgent = "kanmod-updater/0.1.6";
         request.Accept = "application/vnd.github+json";
         request.Proxy = null;
         request.Timeout = 15000;
@@ -290,7 +290,7 @@ internal sealed class ReleaseInfo
             if (x != y) return x > y ? 1 : -1;
         }
 
-        // 0.1.51 > 0.1.51，0.1.51 > 0.1.51-alpha。
+        // 0.1.6 > 0.1.6，0.1.6 > 0.1.6-alpha。
         if (lPre.Length == 0 && rPre.Length == 0) return 0;
         if (lPre.Length == 0) return 1;
         if (rPre.Length == 0) return -1;

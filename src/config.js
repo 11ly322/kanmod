@@ -30,8 +30,10 @@ export const DEFAULT_CONFIG = {
   network: {
     timeoutSeconds: 45,
     downloadTimeoutSeconds: 180,
+    stallTimeoutSeconds: 20,
     maxDownloadMB: 2048,
     mirrorPrefixes: [],
+    githubMirror: true,
     allowInsecureHttp: false,
   },
   ui: {
@@ -89,6 +91,8 @@ function sanitizeConfig(config) {
     : [];
   clean.network.timeoutSeconds = Math.min(300, Math.max(5, Number(clean.network.timeoutSeconds) || 45));
   clean.network.downloadTimeoutSeconds = Math.min(3600, Math.max(30, Number(clean.network.downloadTimeoutSeconds) || 180));
+  clean.network.stallTimeoutSeconds = Math.min(120, Math.max(5, Number(clean.network.stallTimeoutSeconds) || 20));
+  clean.network.githubMirror = clean.network.githubMirror !== false;
   clean.network.maxDownloadMB = Math.min(8192, Math.max(64, Number(clean.network.maxDownloadMB) || 2048));
   clean.install.allowWarning = Boolean(clean.install.allowWarning);
   clean.install.allowUnknown = Boolean(clean.install.allowUnknown);

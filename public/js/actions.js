@@ -201,7 +201,7 @@ export async function loadDiagnostics({ force = false } = {}) {
   state.diagnosticsError = null;
   if (state.view === 'overview' || state.view === 'diagnostics') renderView();
   try {
-    const data = await api('/api/diagnostics?log=1');
+    const data = await api(`/api/diagnostics?log=1${force ? '&force=1' : ''}`);
     state.diagnostics = data.diagnostics;
     state.repairs = data.repairs;
     state.diagnosticsError = null;
@@ -876,6 +876,36 @@ export async function openRepairPreview() {
 }
 
 
+export async function importCurseForgeMod(ref) {
+  if (!state.bootstrap?.instance) {
+    toast('请先连接 KSP 实例。', 'warn');
+    return;
+  }
+  if (!ref) {
+    toast('缺少 CurseForge 项目标识。', 'error');
+    return;
+  }
+  const pkg = state.mod?.data?.package;
+  const name = pkg?.name || '这个 CurseForge 项目';
+  confirmAction({
+    title: '从 CurseForge 安装',
+    message: `将下载并安装 ${name}。CurseForge 项目没有 CKAN 依赖信息，安装后请在问题诊断里检查前置。`,
+    confirmText: '下载并安装',
+    onConfirm: async () => {
+      const data = await api('/api/curseforge/install', { method: 'POST', body: { ref: String(ref) } });
+      if (!data.job) {
+        toast(data.message || '没有可安装的文件。', 'warn');
+        return;
+      }
+      upsertJob(data.job);
+      state.view = 'jobs';
+      renderApp();
+      toast('CurseForge 安装任务已加入队列');
+    },
+  });
+}
+
+
 export async function confirmRepair() {
   const button = document.querySelector('[data-action="confirm-repair"]');
   setBusy(button, true, '执行中…');
@@ -888,9 +918,10 @@ export async function confirmRepair() {
     }
     upsertJob(data.job);
     closeModal();
+    const blocked = Number(data.repairs?.blocked) || 0;
     state.view = 'jobs';
     renderApp();
-    toast('自动修复任务已加入队列');
+    toast(blocked ? `自动修复任务已加入队列，另有 ${blocked} 项无法一起安装，已跳过` : '自动修复任务已加入队列', blocked ? 'warn' : 'success');
   } catch (error) {
     setBusy(button, false);
     toast(error.message, 'error');
@@ -1042,8 +1073,10 @@ export async function saveSettings(form) {
     network: {
       timeoutSeconds: Number(value('timeoutSeconds')) || 45,
       downloadTimeoutSeconds: Number(value('downloadTimeoutSeconds')) || 180,
+      stallTimeoutSeconds: Number(value('stallTimeoutSeconds')) || 20,
       maxDownloadMB: Number(value('maxDownloadMB')) || 2048,
       allowInsecureHttp: checked('allowInsecureHttp'),
+      githubMirror: checked('githubMirror'),
       mirrorPrefixes: String(value('mirrorPrefixes') || '').split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean).slice(0, 8),
     },
     catalog: {
