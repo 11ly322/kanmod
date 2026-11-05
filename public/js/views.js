@@ -1017,6 +1017,11 @@ export function settingsHtml() {
             <div class="field"><label for="downloadTimeoutSeconds">下载超时（秒）</label><input id="downloadTimeoutSeconds" name="downloadTimeoutSeconds" type="number" min="30" max="1800" value="${esc(network.downloadTimeoutSeconds || 180)}"></div>
             <div class="field"><label for="stallTimeoutSeconds">停滞超时（秒）</label><input id="stallTimeoutSeconds" name="stallTimeoutSeconds" type="number" min="5" max="120" value="${esc(network.stallTimeoutSeconds || 20)}"></div>
           </div>
+          <div class="field-row">
+            <div class="field"><label for="parallelDownloads">并发下载数</label><input id="parallelDownloads" name="parallelDownloads" type="number" min="1" max="6" value="${esc(network.parallelDownloads || 3)}"><span class="hint">同时下载多个安装包，1 表示逐个下载。</span></div>
+            <div class="field"><label for="parallelSources">同时尝试下载源</label><input id="parallelSources" name="parallelSources" type="number" min="1" max="4" value="${esc(network.parallelSources || 2)}"><span class="hint">多个源并排竞争，最先完成的生效，其余自动取消。</span></div>
+            <div class="field"><label for="rangeChunks">大文件分片数</label><input id="rangeChunks" name="rangeChunks" type="number" min="1" max="8" value="${esc(network.rangeChunks || 4)}"><span class="hint">超过 4 MB 的文件按 Range 分片并行下载；服务器不支持时自动回退单连接。</span></div>
+          </div>
           <div class="field"><label for="maxDownloadMB">单包大小上限（MB）</label><input id="maxDownloadMB" name="maxDownloadMB" type="number" min="64" max="8192" value="${esc(network.maxDownloadMB || 2048)}"></div>
           <div class="field"><label for="mirrorPrefixes">镜像前缀（每行一个）</label><textarea id="mirrorPrefixes" name="mirrorPrefixes" placeholder="https://ghproxy.net/{url}&#10;https://mirror.example.com/">${esc((network.mirrorPrefixes || []).join('\n'))}</textarea><span class="hint">没有填写 {url} 时，前缀会直接拼接原始下载地址。建议只添加可信镜像。</span></div>
           ${switchRow('githubMirror', 'GitHub 下载自动走公共镜像', '作者直链失败或停滞时，自动改用 ghproxy.net 下载 GitHub Release 资产。', network.githubMirror !== false)}
@@ -1038,7 +1043,7 @@ export function settingsHtml() {
             <label>应用更新</label>
             <span class="hint">通过安装目录中的更新程序检查 GitHub 最新版本（包含测试版）。更新会保留游戏模组与数据。</span>
           </div>
-          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.6')}。更新程序随安装器一起安装。</div>
+          <div id="app-update-status" class="text-muted" style="font-size:10.5px;line-height:1.6;margin-bottom:8px">当前版本 v${esc(data.app?.version || '0.1.7')}。更新程序随安装器一起安装。</div>
           <button class="btn ghost sm" type="button" data-action="check-update">${icon('refresh', 14)}检查更新</button>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn ghost sm" type="button" data-action="cache-status">${icon('refresh', 14)}查看缓存</button>
@@ -1053,7 +1058,7 @@ export function settingsHtml() {
           </div>
           <div class="divider"></div>
           <div class="text-muted" style="font-size:10.5px;line-height:1.6">
-            kanmod ${esc(data.app?.version || '0.1.6')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
+            kanmod ${esc(data.app?.version || '0.1.7')} · 本地服务仅在 127.0.0.1 监听。演示数据位于临时目录时可随时重建。
           </div>
         </section>
       </div>

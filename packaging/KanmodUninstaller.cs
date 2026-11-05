@@ -9,13 +9,13 @@ using Kanmod.Installer;
 [assembly: System.Reflection.AssemblyProduct("kanmod")]
 [assembly: System.Reflection.AssemblyDescription("kanmod uninstaller")]
 [assembly: System.Reflection.AssemblyCompany("kanmod")]
-[assembly: System.Reflection.AssemblyVersion("0.1.6.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.6.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.6")]
+[assembly: System.Reflection.AssemblyVersion("0.1.7.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.7.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.7")]
 
 internal static class Program
 {
-    private const string AppVersion = "0.1.6";
+    private const string AppVersion = "0.1.7";
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\kanmod";
 
     [STAThread]

@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ensureDir, formatBytes, readJson, writeJsonAtomic } from './util/fsx.js';
 import { fileNameFromUrl, safeFileName, safeJoin } from './util/paths.js';
+import { downloadRangedToFile } from './downloadRanges.js';
 
 function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
@@ -233,17 +234,24 @@ export function buildDownloadCandidates(pkg, settings = {}) {
   }
 
   // GitHub Release downloads redirect to objects.githubusercontent.com, which is
-  // frequently slow or unreachable on mainland networks. A public mirror is only
+  // frequently slow or unreachable on mainland networks. Public mirrors are only
   // tried after the author link fails, and can be turned off in settings.
   if (settings.network?.githubMirror !== false) {
+    const mirrors = [
+      { prefix: 'https://ghproxy.net/', label: 'GitHub 镜像 · ghproxy.net' },
+      { prefix: 'https://gh-proxy.com/', label: 'GitHub 镜像 · gh-proxy.com' },
+      { prefix: 'https://ghfast.top/', label: 'GitHub 镜像 · ghfast.top' },
+    ];
     for (const url of direct) {
       if (!/^https:\/\/github\.com\//i.test(url)) continue;
-      push({
-        url: `https://ghproxy.net/${url}`,
-        kind: 'github-mirror',
-        label: 'GitHub 镜像 · ghproxy.net',
-        pageUrl: null,
-      });
+      for (const mirror of mirrors) {
+        push({
+          url: `${mirror.prefix}${url}`,
+          kind: 'github-mirror',
+          label: mirror.label,
+          pageUrl: null,
+        });
+      }
     }
   }
 
@@ -279,7 +287,7 @@ function isAllowedUrl(url, settings) {
   }
 }
 
-async function downloadToFile(url, target, options = {}) {
+async function downloadSingleToFile(url, target, options = {}) {
   const {
     timeoutMs = 180_000,
     stallTimeoutMs = 20_000,
@@ -353,6 +361,47 @@ async function downloadToFile(url, target, options = {}) {
   }
 }
 
+async function downloadToFile(url, target, options = {}) {
+  const chunks = Math.max(1, Math.min(8, Number(options.rangeChunks) || 1));
+  if (chunks > 1) {
+    try {
+      const ranged = await downloadRangedToFile(url, target, {
+        chunks,
+        timeoutMs: options.timeoutMs,
+        stallTimeoutMs: options.stallTimeoutMs,
+        maxBytes: options.maxBytes,
+        expectedSha256: options.expectedSha256,
+        onProgress: options.onProgress,
+        signal: options.signal,
+      });
+      if (ranged) return ranged;
+    } catch (error) {
+      // A cancelled job must stay cancelled; otherwise fall back to one stream.
+      if (options.signal?.aborted) throw error;
+      options.onProgress?.({ received: 0, total: 0, message: `分片下载不可用，改用单连接：${error.message}` });
+    }
+  }
+  return downloadSingleToFile(url, target, options);
+}
+
+/** Runs `worker` over items with a bounded number of concurrent calls. */
+export async function mapLimit(items, limit, worker) {
+  const list = Array.from(items);
+  const size = Math.max(1, Math.min(list.length || 1, Number(limit) || 1));
+  const results = new Array(list.length);
+  let cursor = 0;
+  const runners = Array.from({ length: size }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= list.length) return;
+      results[index] = await worker(list[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
 async function copyDemoArchive(url, target, settings) {
   const name = decodeURIComponent(String(url).replace(/^kanmod-demo:\/\//, ''));
   const dir = settings.demoArchivesDir;
@@ -384,7 +433,119 @@ export async function downloadPackage(pkg, options = {}) {
     throw Object.assign(new Error('该模组没有可用的下载链接。'), { code: 'NO_DOWNLOAD_URL' });
   }
   const expectedSha256 = pkg.downloadHash?.sha256 ? String(pkg.downloadHash.sha256).toLowerCase() : null;
+  const parallelSources = Math.max(1, Math.min(4, Number(settings.network?.parallelSources) || 2));
+  const rangeChunks = Math.max(1, Math.min(8, Number(settings.network?.rangeChunks) || 1));
   const attempts = [];
+
+  const fileTarget = (item) => {
+    const extension = extensionFor(item.url, item.contentType || '');
+    const base = safeFileName(`${pkg.identifier}-${pkg.version}`, 'mod');
+    const fileName = base.toLowerCase().endsWith(extension) ? base : `${base}${extension}`;
+    return { target: path.join(destDir, fileName), metaFile: path.join(destDir, `${fileName}.json`) };
+  };
+
+  const sniffedTarget = async (item, current) => {
+    if (!current.target.toLowerCase().endsWith('.archive')) return current;
+    const sniffed = await sniffArchiveExtension(current.target);
+    if (sniffed !== '.zip' && sniffed !== '.tar.gz') return current;
+    const renamed = `${current.target.slice(0, -'.archive'.length)}${sniffed}`;
+    await fs.rename(current.target, renamed).catch(() => {});
+    const stat = await fs.stat(renamed).catch(() => null);
+    if (!stat) return current;
+    return { target: renamed, metaFile: `${renamed}.json` };
+  };
+
+  const attemptItem = async (item, attemptSignal = null) => {
+    if (item.kind !== 'demo' && !isAllowedUrl(item.url, settings)) {
+      throw new Error('链接协议或 HTTP 设置不被允许');
+    }
+    const current = fileTarget(item);
+    onProgress({ phase: 'attempt', source: item.label, message: `尝试 ${item.label}` });
+    if (item.kind === 'demo') {
+      const result = await copyDemoArchive(item.url, current.target, settings);
+      return { ...current, item, result };
+    }
+    const temp = `${current.target}.race-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const attemptSignalCombined = attemptSignal
+      ? (signal ? AbortSignal.any([signal, attemptSignal]) : attemptSignal)
+      : signal;
+    try {
+      const result = await downloadToFile(item.url, temp, {
+        timeoutMs,
+        stallTimeoutMs,
+        maxBytes,
+        expectedSha256,
+        rangeChunks,
+        signal: attemptSignalCombined,
+        onProgress: (progress) => onProgress({
+          phase: 'download',
+          source: item.label,
+          url: item.url,
+          received: progress.received,
+          total: progress.total,
+          message: progress.message?.startsWith?.('分片')
+            ? `${item.label}：${progress.message}`
+            : `正在下载 ${pkg.name}：${progress.total ? `${Math.round((progress.received / progress.total) * 100)}%` : formatBytes(progress.received)}`,
+        }),
+      });
+      return { item, temp, result };
+    } catch (error) {
+      await fs.rm(temp, { force: true }).catch(() => {});
+      throw error;
+    }
+  };
+
+  // Windows occasionally reports EPERM when a freshly written file is still
+  // being released by the file system, so retry the swap a few times.
+  const moveTemp = async (source, target) => {
+    let last = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        await fs.rename(source, target);
+        return;
+      } catch (error) {
+        last = error;
+        if (error.code !== 'EPERM' && error.code !== 'EBUSY' && error.code !== 'EACCES') break;
+        await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
+      }
+    }
+    throw last;
+  };
+
+  const finalize = async (winner) => {
+    let current = winner.item.kind === 'demo'
+      ? { target: winner.target, metaFile: winner.metaFile }
+      : { target: '', metaFile: '' };
+    if (winner.item.kind !== 'demo') {
+      const { target } = fileTarget(winner.item);
+      await fs.rm(target, { force: true }).catch(() => {});
+      await moveTemp(winner.temp, target);
+      current = { target, metaFile: `${target}.json` };
+      current = await sniffedTarget(winner.item, current);
+      await writeJsonAtomic(current.metaFile, {
+        url: winner.item.url,
+        label: winner.item.label,
+        bytes: winner.result.bytes,
+        sha256: winner.result.sha256,
+        downloadedAt: new Date().toISOString(),
+        identifier: pkg.identifier,
+        version: pkg.version,
+      });
+    }
+    const bytes = winner.item.kind === 'demo' ? winner.result.bytes : winner.result.bytes;
+    onProgress({ phase: 'complete', source: winner.item.label, message: `下载完成：${formatBytes(bytes)}`, received: bytes, total: bytes });
+    return {
+      path: current.target,
+      bytes,
+      sha256: winner.result.sha256 || null,
+      candidate: winner.item,
+      attempts,
+    };
+  };
+
+  // Resolve metadata-style candidates (GitHub Releases, SpaceDock) once so the
+  // resulting direct URLs can be raced against the author link.
+  const items = [];
   for (const candidate of candidates) {
     if (signal?.aborted) throw new Error('已取消。');
     let resolved = [candidate];
@@ -401,82 +562,91 @@ export async function downloadPackage(pkg, options = {}) {
         continue;
       }
     }
-    for (const item of resolved) {
-      if (signal?.aborted) throw new Error('已取消。');
-      if (item.kind !== 'demo' && !isAllowedUrl(item.url, settings)) {
-        attempts.push({ url: item.url, label: item.label, error: '链接协议或 HTTP 设置不被允许' });
-        continue;
-      }
-      const extension = extensionFor(item.url, item.contentType || '');
-      const base = safeFileName(`${pkg.identifier}-${pkg.version}`, 'mod');
-      const fileName = base.toLowerCase().endsWith(extension) ? base : `${base}${extension}`;
-      let target = path.join(destDir, fileName);
-      let metaFile = `${target}.json`;
-      onProgress({ phase: 'attempt', source: item.label, message: `尝试 ${item.label}` });
-      try {
-        if (item.kind !== 'demo') {
-          const cached = await readJson(metaFile, null);
-          if (cached) {
-            const stat = await fs.stat(target).catch(() => null);
-            const sameSize = stat && Number(cached.bytes) > 0 && stat.size === Number(cached.bytes);
-            const sameHash = !expectedSha256 || (cached.sha256 && cached.sha256 === expectedSha256);
-            if (sameSize && sameHash) {
-              onProgress({ phase: 'complete', source: item.label, message: '复用已下载的安装包', total: stat.size, received: stat.size });
-              return { path: target, bytes: stat.size, sha256: cached.sha256 || null, candidate: item, attempts, cached: true };
-            }
-          }
-        }
-        const progress = (progress) => onProgress({
-          phase: 'download',
-          source: item.label,
-          url: item.url,
-          received: progress.received,
-          total: progress.total,
-          message: `正在下载 ${pkg.name}：${progress.total ? `${Math.round((progress.received / progress.total) * 100)}%` : formatBytes(progress.received)}`,
-        });
-        const result = item.kind === 'demo'
-          ? await copyDemoArchive(item.url, target, settings)
-          : await downloadToFile(item.url, target, {
-            timeoutMs,
-            stallTimeoutMs,
-            maxBytes,
-            expectedSha256,
-            signal,
-            onProgress: progress,
-          });
-        if (item.kind !== 'demo') {
-          if (target.toLowerCase().endsWith('.archive')) {
-            const sniffed = await sniffArchiveExtension(target);
-            if (sniffed === '.zip' || sniffed === '.tar.gz') {
-              const renamed = `${target.slice(0, -'.archive'.length)}${sniffed}`;
-              await fs.rename(target, renamed).catch(() => {});
-              if (await fs.stat(renamed).catch(() => null)) {
-                target = renamed;
-                metaFile = `${target}.json`;
-              }
-            }
-          }
-          await writeJsonAtomic(metaFile, {
-            url: item.url,
-            label: item.label,
-            bytes: result.bytes,
-            sha256: result.sha256,
-            downloadedAt: new Date().toISOString(),
-            identifier: pkg.identifier,
-            version: pkg.version,
-          });
-        }
-        onProgress({ phase: 'complete', source: item.label, message: `下载完成：${formatBytes(result.bytes)}`, received: result.bytes, total: result.bytes });
-        return { path: target, bytes: result.bytes, sha256: result.sha256, candidate: item, attempts };
-      } catch (error) {
-        attempts.push({ url: item.url, label: item.label, error: error.message });
-        await fs.rm(target, { force: true }).catch(() => {});
-        await fs.rm(metaFile, { force: true }).catch(() => {});
-        onProgress({ phase: 'fallback', source: item.label, message: `${item.label} 失败：${error.message}` });
-        if (signal?.aborted) throw new Error('已取消。');
+    items.push(...resolved);
+  }
+  if (!items.length) {
+    const summary = attempts.map((attempt) => `${attempt.label}: ${attempt.error}`).join('；');
+    throw Object.assign(new Error(`所有下载源都失败了${summary ? `：${summary}` : '。'}`), {
+      code: 'DOWNLOAD_FAILED',
+      attempts,
+    });
+  }
+
+  const demoItem = items.find((item) => item.kind === 'demo');
+  if (demoItem) return finalize(await attemptItem(demoItem));
+
+  const networkItems = items.filter((item) => item.kind !== 'demo');
+
+  // Reuse an earlier download when the cached archive matches the package.
+  if (networkItems.length) {
+    const first = fileTarget(networkItems[0]);
+    const cached = await readJson(first.metaFile, null);
+    if (cached) {
+      const stat = await fs.stat(first.target).catch(() => null);
+      const sameSize = stat && Number(cached.bytes) > 0 && stat.size === Number(cached.bytes);
+      const sameHash = !expectedSha256 || (cached.sha256 && cached.sha256 === expectedSha256);
+      if (sameSize && sameHash) {
+        onProgress({ phase: 'complete', source: '缓存', message: '复用已下载的安装包', total: stat.size, received: stat.size });
+        return { path: first.target, bytes: stat.size, sha256: cached.sha256 || null, candidate: networkItems[0], attempts, cached: true };
       }
     }
   }
+
+  if (parallelSources > 1 && networkItems.length > 1) {
+    for (let index = 0; index < networkItems.length; index += parallelSources) {
+      if (signal?.aborted) throw new Error('已取消。');
+      const wave = networkItems.slice(index, index + parallelSources);
+      const tasks = wave.map((item) => {
+        const controller = new AbortController();
+        const task = { item, controller, temp: null };
+        task.promise = attemptItem(item, controller.signal).then((value) => {
+          task.temp = value.temp || value.target;
+          return value;
+        });
+        return task;
+      });
+      let winner = null;
+      try {
+        winner = await new Promise((resolve, reject) => {
+          let pending = tasks.length;
+          let settled = false;
+          for (const task of tasks) {
+            task.promise.then((value) => {
+              if (settled) {
+                // A slower source finished after the winner: discard its copy.
+                task.controller.abort();
+                if (task.temp) fs.rm(task.temp, { force: true }).catch(() => {});
+                return;
+              }
+              settled = true;
+              for (const other of tasks) if (other !== task) other.controller.abort();
+              resolve(value);
+            }).catch((error) => {
+              pending -= 1;
+              attempts.push({ url: task.item.url, label: task.item.label, error: error.message });
+              onProgress({ phase: 'fallback', source: task.item.label, message: `${task.item.label} 失败：${error.message}` });
+              if (!settled && pending === 0) reject(error);
+            });
+          }
+        });
+      } catch {
+        // Whole wave failed; try the next set of sources.
+        continue;
+      }
+      return finalize(winner);
+    }
+  } else {
+    for (const item of networkItems) {
+      if (signal?.aborted) throw new Error('已取消。');
+      try {
+        return finalize(await attemptItem(item));
+      } catch (error) {
+        attempts.push({ url: item.url, label: item.label, error: error.message });
+        onProgress({ phase: 'fallback', source: item.label, message: `${item.label} 失败：${error.message}` });
+      }
+    }
+  }
+
   const summary = attempts.map((attempt) => `${attempt.label}: ${attempt.error}`).join('；');
   throw Object.assign(new Error(`所有下载源都失败了${summary ? `：${summary}` : '。'}`), {
     code: 'DOWNLOAD_FAILED',

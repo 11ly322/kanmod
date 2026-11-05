@@ -7,7 +7,7 @@ import { loadRegistry } from '../registry.js';
 import { inspectKspPath } from '../ksp/version.js';
 import { scanGameData } from '../ksp/scan.js';
 import { resolvePlan } from '../catalog/resolver.js';
-import { downloadPackage } from '../downloads.js';
+import { downloadPackage, mapLimit } from '../downloads.js';
 import { installArchive, uninstallRecord } from '../installer.js';
 import { diagnoseGame, findLogFile, planRepairs } from '../diagnostics.js';
 import { translateText, cleanSourceText, hasAnyChinese } from '../translate.js';
@@ -383,30 +383,59 @@ async function enqueueInstall(context, plan, { title = '安装模组', meta = {}
   return context.jobs.create('install', title, async ({ report, signal }) => {
     const installed = [];
     const total = order.length || 1;
-    let index = 0;
+    const packages = [];
     for (const ordered of order) {
-      if (signal.aborted) throw new Error('已取消。');
-      index += 1;
       const node = nodes.get(lower(ordered.identifier)) || ordered;
       const pkg = catalog.get(node.identifier, node.version);
       if (!pkg) throw new Error(`索引中找不到 ${node.identifier} ${node.version}。`);
-      report({
-        phase: 'download',
-        current: index,
-        total,
-        message: `(${index}/${order.length}) 准备 ${pkg.name} ${pkg.version}`,
+      packages.push(pkg);
+    }
+    const parallel = Math.max(1, Math.min(6, Number(settings.network?.parallelDownloads) || 3));
+    const downloaded = new Map();
+    const perPackage = new Map();
+    const downloadController = new AbortController();
+    const downloadSignal = AbortSignal.any([signal, downloadController.signal]);
+    report({
+      phase: 'download',
+      current: 0,
+      total,
+      percent: 0,
+      message: `并行下载 ${packages.length} 个安装包（${parallel} 并发）`,
+    });
+    try {
+      await mapLimit(packages, parallel, async (pkg) => {
+        const download = await downloadPackage(pkg, {
+          destDir: downloadsDir,
+          settings,
+          signal: downloadSignal,
+          onProgress: (progress) => {
+            if (progress.received || progress.total) {
+              perPackage.set(pkg.identifier, { received: progress.received || 0, total: progress.total || 0 });
+            }
+            const fraction = Array.from(perPackage.values()).reduce((sum, item) => (
+              sum + (item.total ? Math.min(1, item.received / item.total) : 0)
+            ), 0);
+            report({
+              ...progress,
+              phase: 'download',
+              current: Math.min(total, fraction),
+              total,
+              message: `下载 ${pkg.name}${progress.message ? `：${progress.message}` : ''}`,
+            });
+          },
+        });
+        perPackage.set(pkg.identifier, { received: download.bytes, total: download.bytes });
+        downloaded.set(pkg.identifier, download);
       });
-      const download = await downloadPackage(pkg, {
-        destDir: downloadsDir,
-        settings,
-        signal,
-        onProgress: (progress) => report({
-          ...progress,
-          current: index - 1 + (progress.received && progress.total ? progress.received / progress.total : 0),
-          total,
-          message: `(${index}/${order.length}) ${progress.message || pkg.name}`,
-        }),
-      });
+    } catch (error) {
+      downloadController.abort();
+      throw error;
+    }
+    let index = 0;
+    for (const pkg of packages) {
+      if (signal.aborted) throw new Error('已取消。');
+      index += 1;
+      const download = downloaded.get(pkg.identifier);
       report({ phase: 'install', current: index, total, message: `正在安装 ${pkg.name} ${pkg.version}` });
       const result = await installArchive({
         archivePath: download.path,
